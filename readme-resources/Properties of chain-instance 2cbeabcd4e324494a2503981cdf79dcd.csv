@@ -1,0 +1,6 @@
+﻿Method Name,Description
+"use(injection: (context, next) => void)",add chain-node.
+context(...params),merge context with anything.
+start(),start chain progress.
+cancel(),cancel chain progress from progressing.
+hack(injection: (rootContext) => rooCcontext),[Dangerous] merge rootContext with aything.
