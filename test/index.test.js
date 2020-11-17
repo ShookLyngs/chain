@@ -108,10 +108,10 @@ describe(`create chain()`, () => {
       })
       .onCanceled(() => {
         ++calls.onCanceled;
-        expect(calls).to.be.equal({
+        expect(calls).to.eql({
           // life-circle
           onStart: 1,
-          onProgress: 2,
+          onProgress: 1,
           onFinish: 0,
           onBeforeCancel: 1,
           onCanceled: 1,
