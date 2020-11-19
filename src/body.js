@@ -6,6 +6,7 @@ import { generateToken } from "./util";
 const ChainStatus = {
   Ready:    Symbol('ready'),
   Progress: Symbol('progress'),
+  Bubbling:  Symbol('bubbling'),
   Finished: Symbol('finished'),
   Canceled: Symbol('canceled'),
 };
@@ -14,17 +15,7 @@ const initializeContext = (...params) => {
   const context = {
     token: generateToken(),
     queue: [],
-    hooks: {
-      // life-circle
-      onStart: [],
-      onProgress: [],
-      onBeforeCancel: [],
-      onCanceled: [],
-      onFinish: [],
-      // hack-in
-      onBeforeHack: [],
-      onHacked: [],
-    },
+    hooks: {},
     data: {
       caller: null,
       status: ChainStatus.Ready,
@@ -46,6 +37,7 @@ const useMiddleware = (context, injection, next) => {
 
 const createNext = (context) => {
   const queue = context.queue;
+
   return async (forward = true) => {
     if (!forward) {
       cancelProgress(context);
@@ -60,8 +52,8 @@ const createNext = (context) => {
 
       await task.action(context, createNext(context));
     } else {
-      context.data.status = ChainStatus.Finished;
-      triggerHook(context, 'onFinish');
+      context.data.status = ChainStatus.Bubbling;
+      triggerHook(context, 'onBubbling');
     }
   };
 };
@@ -73,6 +65,9 @@ const startProgress = (context) => {
     context.data.status = ChainStatus.Progress;
     try {
       await createNext(context)();
+
+      context.data.status = ChainStatus.Finished;
+      triggerHook(context, 'onFinish');
     } catch(error) {
       if (error.status === ChainStatus.Canceled) {
         triggerHook(context, 'onCanceled');
@@ -100,71 +95,51 @@ const hackContext = (context, injection) => {
   return context;
 };
 
-const registerHook = (context, type, isTriggerImmediately = false) => {
-  if (!type) {
-    throw new Error(`require param 'type'`);
+const useHook = (context, getData, type, callback) => {
+  if (typeof getData !== 'function') {
+    throw new Error(`Param 'getData' must be an instance of Function`);
   }
-  if (!context.hooks) {
-    context.hooks = {};
+  if (typeof callback !== 'function') {
+    throw new Error(`Param 'callback' must be an instance of Function`);
+  }
+  if (!type) {
+    throw new Error(`Can't find param 'type'`);
   }
   if (!context.hooks[type]) {
     context.hooks[type] = [];
-
-    if (isTriggerImmediately) {
-      triggerHook(context, type);
-    }
-  } else {
-    console.warn(`Hook ${type} has been registered before`);
   }
+
+  context.hooks[type].push({
+    getData,
+    callback
+  });
 };
 
-const registerHooks = (context, types, isTriggerImmediately = false) => {
-  if (!Array.isArray(types) && Object.prototype.toString.call(types) !== '[object Object]') {
-    types = [ types ];
-  }
-  if (Array.isArray(types)) {
-    // prevent same-types in a queue
-    [ ...(new Set(types)) ].forEach((type) => {
-      registerHook(context, type, isTriggerImmediately);
-    });
-  } else if (Object.prototype.toString.call(types) === '[object Object]') {
-    for (const key in types) {
-      if (!Object.prototype.hasOwnProperty.call(types, key)) continue;
-      registerHook(context, types[key]?.type, types[key]?.trigger);
-    }
-  }
-};
-
-const useHook = (context, getData, type, callback) => {
-  // empty-error
-  if (!type) {
-    throw new Error(`can't find param 'type'`);
-  }
-  // callback type-error
-  if (typeof callback !== 'function') {
-    throw new Error(`param 'callback' must be an instance of Function`);
+const removeHook = (context, target) => {
+  if (!target) {
+    throw new Error(`can't find param 'target'`);
   }
 
-  // check type's type-check and push it to list
-  if (context.hooks[type] !== void 0) {
-    const token = generateToken();
-    context.hooks[type].push({ token, getData, callback });
-    return token;
-  } else {
-    throw new Error(`can't find hook type: ${type}`);
-  }
-};
-
-const removeHook = (context, token) => {
-  if (!token) {
-    throw new Error(`can't find param 'token'`);
-  }
   const hooks = context.hooks;
+
   for (let key in hooks) {
     if (!Object.prototype.hasOwnProperty.call(hooks, key)) continue;
     if (!hooks[key]?.length) continue;
-    hooks[key] = hooks[key].filter(hook => hook.token !== token);
+
+    hooks[key] = hooks[key].filter(hook => hook.callback !== target);
   }
+};
+
+const removeHooks = (context, type) => {
+  if (!type) {
+    context.hooks = {};
+    return;
+  }
+
+  const types = Array.isArray(type) ? type : type.spilit(' ');
+  types.forEach((type) => {
+    context.hooks[type] = [];
+  });
 };
 
 const triggerHook = (context, type, ...params) => {
@@ -173,13 +148,12 @@ const triggerHook = (context, type, ...params) => {
   }
 
   const hooks = context?.hooks?.[type];
-  if (hooks?.length || hooks?.length === 0) {
+  if (hooks && hooks?.length) {
     hooks.forEach((hook) => {
       hook.callback(hook.getData(), ...params);
     });
     return true;
   } else {
-    console.warn(`hook doesn't exists: ${type}`);
     return false;
   }
 };
@@ -195,9 +169,8 @@ export {
   startProgress,
   cancelProgress,
   hackContext,
-  registerHook,
-  registerHooks,
   useHook,
   removeHook,
+  removeHooks,
   triggerHook,
 };

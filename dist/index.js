@@ -781,38 +781,755 @@
 	  return _construct.apply(null, arguments);
 	}
 
-	function _toConsumableArray(arr) {
-	  return _arrayWithoutHoles(arr) || _iterableToArray(arr) || _unsupportedIterableToArray(arr) || _nonIterableSpread();
+	var runtime_1 = createCommonjsModule(function (module) {
+	/**
+	 * Copyright (c) 2014-present, Facebook, Inc.
+	 *
+	 * This source code is licensed under the MIT license found in the
+	 * LICENSE file in the root directory of this source tree.
+	 */
+
+	var runtime = (function (exports) {
+
+	  var Op = Object.prototype;
+	  var hasOwn = Op.hasOwnProperty;
+	  var undefined$1; // More compressible than void 0.
+	  var $Symbol = typeof Symbol === "function" ? Symbol : {};
+	  var iteratorSymbol = $Symbol.iterator || "@@iterator";
+	  var asyncIteratorSymbol = $Symbol.asyncIterator || "@@asyncIterator";
+	  var toStringTagSymbol = $Symbol.toStringTag || "@@toStringTag";
+
+	  function define(obj, key, value) {
+	    Object.defineProperty(obj, key, {
+	      value: value,
+	      enumerable: true,
+	      configurable: true,
+	      writable: true
+	    });
+	    return obj[key];
+	  }
+	  try {
+	    // IE 8 has a broken Object.defineProperty that only works on DOM objects.
+	    define({}, "");
+	  } catch (err) {
+	    define = function(obj, key, value) {
+	      return obj[key] = value;
+	    };
+	  }
+
+	  function wrap(innerFn, outerFn, self, tryLocsList) {
+	    // If outerFn provided and outerFn.prototype is a Generator, then outerFn.prototype instanceof Generator.
+	    var protoGenerator = outerFn && outerFn.prototype instanceof Generator ? outerFn : Generator;
+	    var generator = Object.create(protoGenerator.prototype);
+	    var context = new Context(tryLocsList || []);
+
+	    // The ._invoke method unifies the implementations of the .next,
+	    // .throw, and .return methods.
+	    generator._invoke = makeInvokeMethod(innerFn, self, context);
+
+	    return generator;
+	  }
+	  exports.wrap = wrap;
+
+	  // Try/catch helper to minimize deoptimizations. Returns a completion
+	  // record like context.tryEntries[i].completion. This interface could
+	  // have been (and was previously) designed to take a closure to be
+	  // invoked without arguments, but in all the cases we care about we
+	  // already have an existing method we want to call, so there's no need
+	  // to create a new function object. We can even get away with assuming
+	  // the method takes exactly one argument, since that happens to be true
+	  // in every case, so we don't have to touch the arguments object. The
+	  // only additional allocation required is the completion record, which
+	  // has a stable shape and so hopefully should be cheap to allocate.
+	  function tryCatch(fn, obj, arg) {
+	    try {
+	      return { type: "normal", arg: fn.call(obj, arg) };
+	    } catch (err) {
+	      return { type: "throw", arg: err };
+	    }
+	  }
+
+	  var GenStateSuspendedStart = "suspendedStart";
+	  var GenStateSuspendedYield = "suspendedYield";
+	  var GenStateExecuting = "executing";
+	  var GenStateCompleted = "completed";
+
+	  // Returning this object from the innerFn has the same effect as
+	  // breaking out of the dispatch switch statement.
+	  var ContinueSentinel = {};
+
+	  // Dummy constructor functions that we use as the .constructor and
+	  // .constructor.prototype properties for functions that return Generator
+	  // objects. For full spec compliance, you may wish to configure your
+	  // minifier not to mangle the names of these two functions.
+	  function Generator() {}
+	  function GeneratorFunction() {}
+	  function GeneratorFunctionPrototype() {}
+
+	  // This is a polyfill for %IteratorPrototype% for environments that
+	  // don't natively support it.
+	  var IteratorPrototype = {};
+	  IteratorPrototype[iteratorSymbol] = function () {
+	    return this;
+	  };
+
+	  var getProto = Object.getPrototypeOf;
+	  var NativeIteratorPrototype = getProto && getProto(getProto(values([])));
+	  if (NativeIteratorPrototype &&
+	      NativeIteratorPrototype !== Op &&
+	      hasOwn.call(NativeIteratorPrototype, iteratorSymbol)) {
+	    // This environment has a native %IteratorPrototype%; use it instead
+	    // of the polyfill.
+	    IteratorPrototype = NativeIteratorPrototype;
+	  }
+
+	  var Gp = GeneratorFunctionPrototype.prototype =
+	    Generator.prototype = Object.create(IteratorPrototype);
+	  GeneratorFunction.prototype = Gp.constructor = GeneratorFunctionPrototype;
+	  GeneratorFunctionPrototype.constructor = GeneratorFunction;
+	  GeneratorFunction.displayName = define(
+	    GeneratorFunctionPrototype,
+	    toStringTagSymbol,
+	    "GeneratorFunction"
+	  );
+
+	  // Helper for defining the .next, .throw, and .return methods of the
+	  // Iterator interface in terms of a single ._invoke method.
+	  function defineIteratorMethods(prototype) {
+	    ["next", "throw", "return"].forEach(function(method) {
+	      define(prototype, method, function(arg) {
+	        return this._invoke(method, arg);
+	      });
+	    });
+	  }
+
+	  exports.isGeneratorFunction = function(genFun) {
+	    var ctor = typeof genFun === "function" && genFun.constructor;
+	    return ctor
+	      ? ctor === GeneratorFunction ||
+	        // For the native GeneratorFunction constructor, the best we can
+	        // do is to check its .name property.
+	        (ctor.displayName || ctor.name) === "GeneratorFunction"
+	      : false;
+	  };
+
+	  exports.mark = function(genFun) {
+	    if (Object.setPrototypeOf) {
+	      Object.setPrototypeOf(genFun, GeneratorFunctionPrototype);
+	    } else {
+	      genFun.__proto__ = GeneratorFunctionPrototype;
+	      define(genFun, toStringTagSymbol, "GeneratorFunction");
+	    }
+	    genFun.prototype = Object.create(Gp);
+	    return genFun;
+	  };
+
+	  // Within the body of any async function, `await x` is transformed to
+	  // `yield regeneratorRuntime.awrap(x)`, so that the runtime can test
+	  // `hasOwn.call(value, "__await")` to determine if the yielded value is
+	  // meant to be awaited.
+	  exports.awrap = function(arg) {
+	    return { __await: arg };
+	  };
+
+	  function AsyncIterator(generator, PromiseImpl) {
+	    function invoke(method, arg, resolve, reject) {
+	      var record = tryCatch(generator[method], generator, arg);
+	      if (record.type === "throw") {
+	        reject(record.arg);
+	      } else {
+	        var result = record.arg;
+	        var value = result.value;
+	        if (value &&
+	            typeof value === "object" &&
+	            hasOwn.call(value, "__await")) {
+	          return PromiseImpl.resolve(value.__await).then(function(value) {
+	            invoke("next", value, resolve, reject);
+	          }, function(err) {
+	            invoke("throw", err, resolve, reject);
+	          });
+	        }
+
+	        return PromiseImpl.resolve(value).then(function(unwrapped) {
+	          // When a yielded Promise is resolved, its final value becomes
+	          // the .value of the Promise<{value,done}> result for the
+	          // current iteration.
+	          result.value = unwrapped;
+	          resolve(result);
+	        }, function(error) {
+	          // If a rejected Promise was yielded, throw the rejection back
+	          // into the async generator function so it can be handled there.
+	          return invoke("throw", error, resolve, reject);
+	        });
+	      }
+	    }
+
+	    var previousPromise;
+
+	    function enqueue(method, arg) {
+	      function callInvokeWithMethodAndArg() {
+	        return new PromiseImpl(function(resolve, reject) {
+	          invoke(method, arg, resolve, reject);
+	        });
+	      }
+
+	      return previousPromise =
+	        // If enqueue has been called before, then we want to wait until
+	        // all previous Promises have been resolved before calling invoke,
+	        // so that results are always delivered in the correct order. If
+	        // enqueue has not been called before, then it is important to
+	        // call invoke immediately, without waiting on a callback to fire,
+	        // so that the async generator function has the opportunity to do
+	        // any necessary setup in a predictable way. This predictability
+	        // is why the Promise constructor synchronously invokes its
+	        // executor callback, and why async functions synchronously
+	        // execute code before the first await. Since we implement simple
+	        // async functions in terms of async generators, it is especially
+	        // important to get this right, even though it requires care.
+	        previousPromise ? previousPromise.then(
+	          callInvokeWithMethodAndArg,
+	          // Avoid propagating failures to Promises returned by later
+	          // invocations of the iterator.
+	          callInvokeWithMethodAndArg
+	        ) : callInvokeWithMethodAndArg();
+	    }
+
+	    // Define the unified helper method that is used to implement .next,
+	    // .throw, and .return (see defineIteratorMethods).
+	    this._invoke = enqueue;
+	  }
+
+	  defineIteratorMethods(AsyncIterator.prototype);
+	  AsyncIterator.prototype[asyncIteratorSymbol] = function () {
+	    return this;
+	  };
+	  exports.AsyncIterator = AsyncIterator;
+
+	  // Note that simple async functions are implemented on top of
+	  // AsyncIterator objects; they just return a Promise for the value of
+	  // the final result produced by the iterator.
+	  exports.async = function(innerFn, outerFn, self, tryLocsList, PromiseImpl) {
+	    if (PromiseImpl === void 0) PromiseImpl = Promise;
+
+	    var iter = new AsyncIterator(
+	      wrap(innerFn, outerFn, self, tryLocsList),
+	      PromiseImpl
+	    );
+
+	    return exports.isGeneratorFunction(outerFn)
+	      ? iter // If outerFn is a generator, return the full iterator.
+	      : iter.next().then(function(result) {
+	          return result.done ? result.value : iter.next();
+	        });
+	  };
+
+	  function makeInvokeMethod(innerFn, self, context) {
+	    var state = GenStateSuspendedStart;
+
+	    return function invoke(method, arg) {
+	      if (state === GenStateExecuting) {
+	        throw new Error("Generator is already running");
+	      }
+
+	      if (state === GenStateCompleted) {
+	        if (method === "throw") {
+	          throw arg;
+	        }
+
+	        // Be forgiving, per 25.3.3.3.3 of the spec:
+	        // https://people.mozilla.org/~jorendorff/es6-draft.html#sec-generatorresume
+	        return doneResult();
+	      }
+
+	      context.method = method;
+	      context.arg = arg;
+
+	      while (true) {
+	        var delegate = context.delegate;
+	        if (delegate) {
+	          var delegateResult = maybeInvokeDelegate(delegate, context);
+	          if (delegateResult) {
+	            if (delegateResult === ContinueSentinel) continue;
+	            return delegateResult;
+	          }
+	        }
+
+	        if (context.method === "next") {
+	          // Setting context._sent for legacy support of Babel's
+	          // function.sent implementation.
+	          context.sent = context._sent = context.arg;
+
+	        } else if (context.method === "throw") {
+	          if (state === GenStateSuspendedStart) {
+	            state = GenStateCompleted;
+	            throw context.arg;
+	          }
+
+	          context.dispatchException(context.arg);
+
+	        } else if (context.method === "return") {
+	          context.abrupt("return", context.arg);
+	        }
+
+	        state = GenStateExecuting;
+
+	        var record = tryCatch(innerFn, self, context);
+	        if (record.type === "normal") {
+	          // If an exception is thrown from innerFn, we leave state ===
+	          // GenStateExecuting and loop back for another invocation.
+	          state = context.done
+	            ? GenStateCompleted
+	            : GenStateSuspendedYield;
+
+	          if (record.arg === ContinueSentinel) {
+	            continue;
+	          }
+
+	          return {
+	            value: record.arg,
+	            done: context.done
+	          };
+
+	        } else if (record.type === "throw") {
+	          state = GenStateCompleted;
+	          // Dispatch the exception by looping back around to the
+	          // context.dispatchException(context.arg) call above.
+	          context.method = "throw";
+	          context.arg = record.arg;
+	        }
+	      }
+	    };
+	  }
+
+	  // Call delegate.iterator[context.method](context.arg) and handle the
+	  // result, either by returning a { value, done } result from the
+	  // delegate iterator, or by modifying context.method and context.arg,
+	  // setting context.delegate to null, and returning the ContinueSentinel.
+	  function maybeInvokeDelegate(delegate, context) {
+	    var method = delegate.iterator[context.method];
+	    if (method === undefined$1) {
+	      // A .throw or .return when the delegate iterator has no .throw
+	      // method always terminates the yield* loop.
+	      context.delegate = null;
+
+	      if (context.method === "throw") {
+	        // Note: ["return"] must be used for ES3 parsing compatibility.
+	        if (delegate.iterator["return"]) {
+	          // If the delegate iterator has a return method, give it a
+	          // chance to clean up.
+	          context.method = "return";
+	          context.arg = undefined$1;
+	          maybeInvokeDelegate(delegate, context);
+
+	          if (context.method === "throw") {
+	            // If maybeInvokeDelegate(context) changed context.method from
+	            // "return" to "throw", let that override the TypeError below.
+	            return ContinueSentinel;
+	          }
+	        }
+
+	        context.method = "throw";
+	        context.arg = new TypeError(
+	          "The iterator does not provide a 'throw' method");
+	      }
+
+	      return ContinueSentinel;
+	    }
+
+	    var record = tryCatch(method, delegate.iterator, context.arg);
+
+	    if (record.type === "throw") {
+	      context.method = "throw";
+	      context.arg = record.arg;
+	      context.delegate = null;
+	      return ContinueSentinel;
+	    }
+
+	    var info = record.arg;
+
+	    if (! info) {
+	      context.method = "throw";
+	      context.arg = new TypeError("iterator result is not an object");
+	      context.delegate = null;
+	      return ContinueSentinel;
+	    }
+
+	    if (info.done) {
+	      // Assign the result of the finished delegate to the temporary
+	      // variable specified by delegate.resultName (see delegateYield).
+	      context[delegate.resultName] = info.value;
+
+	      // Resume execution at the desired location (see delegateYield).
+	      context.next = delegate.nextLoc;
+
+	      // If context.method was "throw" but the delegate handled the
+	      // exception, let the outer generator proceed normally. If
+	      // context.method was "next", forget context.arg since it has been
+	      // "consumed" by the delegate iterator. If context.method was
+	      // "return", allow the original .return call to continue in the
+	      // outer generator.
+	      if (context.method !== "return") {
+	        context.method = "next";
+	        context.arg = undefined$1;
+	      }
+
+	    } else {
+	      // Re-yield the result returned by the delegate method.
+	      return info;
+	    }
+
+	    // The delegate iterator is finished, so forget it and continue with
+	    // the outer generator.
+	    context.delegate = null;
+	    return ContinueSentinel;
+	  }
+
+	  // Define Generator.prototype.{next,throw,return} in terms of the
+	  // unified ._invoke helper method.
+	  defineIteratorMethods(Gp);
+
+	  define(Gp, toStringTagSymbol, "Generator");
+
+	  // A Generator should always return itself as the iterator object when the
+	  // @@iterator function is called on it. Some browsers' implementations of the
+	  // iterator prototype chain incorrectly implement this, causing the Generator
+	  // object to not be returned from this call. This ensures that doesn't happen.
+	  // See https://github.com/facebook/regenerator/issues/274 for more details.
+	  Gp[iteratorSymbol] = function() {
+	    return this;
+	  };
+
+	  Gp.toString = function() {
+	    return "[object Generator]";
+	  };
+
+	  function pushTryEntry(locs) {
+	    var entry = { tryLoc: locs[0] };
+
+	    if (1 in locs) {
+	      entry.catchLoc = locs[1];
+	    }
+
+	    if (2 in locs) {
+	      entry.finallyLoc = locs[2];
+	      entry.afterLoc = locs[3];
+	    }
+
+	    this.tryEntries.push(entry);
+	  }
+
+	  function resetTryEntry(entry) {
+	    var record = entry.completion || {};
+	    record.type = "normal";
+	    delete record.arg;
+	    entry.completion = record;
+	  }
+
+	  function Context(tryLocsList) {
+	    // The root entry object (effectively a try statement without a catch
+	    // or a finally block) gives us a place to store values thrown from
+	    // locations where there is no enclosing try statement.
+	    this.tryEntries = [{ tryLoc: "root" }];
+	    tryLocsList.forEach(pushTryEntry, this);
+	    this.reset(true);
+	  }
+
+	  exports.keys = function(object) {
+	    var keys = [];
+	    for (var key in object) {
+	      keys.push(key);
+	    }
+	    keys.reverse();
+
+	    // Rather than returning an object with a next method, we keep
+	    // things simple and return the next function itself.
+	    return function next() {
+	      while (keys.length) {
+	        var key = keys.pop();
+	        if (key in object) {
+	          next.value = key;
+	          next.done = false;
+	          return next;
+	        }
+	      }
+
+	      // To avoid creating an additional object, we just hang the .value
+	      // and .done properties off the next function object itself. This
+	      // also ensures that the minifier will not anonymize the function.
+	      next.done = true;
+	      return next;
+	    };
+	  };
+
+	  function values(iterable) {
+	    if (iterable) {
+	      var iteratorMethod = iterable[iteratorSymbol];
+	      if (iteratorMethod) {
+	        return iteratorMethod.call(iterable);
+	      }
+
+	      if (typeof iterable.next === "function") {
+	        return iterable;
+	      }
+
+	      if (!isNaN(iterable.length)) {
+	        var i = -1, next = function next() {
+	          while (++i < iterable.length) {
+	            if (hasOwn.call(iterable, i)) {
+	              next.value = iterable[i];
+	              next.done = false;
+	              return next;
+	            }
+	          }
+
+	          next.value = undefined$1;
+	          next.done = true;
+
+	          return next;
+	        };
+
+	        return next.next = next;
+	      }
+	    }
+
+	    // Return an iterator with no values.
+	    return { next: doneResult };
+	  }
+	  exports.values = values;
+
+	  function doneResult() {
+	    return { value: undefined$1, done: true };
+	  }
+
+	  Context.prototype = {
+	    constructor: Context,
+
+	    reset: function(skipTempReset) {
+	      this.prev = 0;
+	      this.next = 0;
+	      // Resetting context._sent for legacy support of Babel's
+	      // function.sent implementation.
+	      this.sent = this._sent = undefined$1;
+	      this.done = false;
+	      this.delegate = null;
+
+	      this.method = "next";
+	      this.arg = undefined$1;
+
+	      this.tryEntries.forEach(resetTryEntry);
+
+	      if (!skipTempReset) {
+	        for (var name in this) {
+	          // Not sure about the optimal order of these conditions:
+	          if (name.charAt(0) === "t" &&
+	              hasOwn.call(this, name) &&
+	              !isNaN(+name.slice(1))) {
+	            this[name] = undefined$1;
+	          }
+	        }
+	      }
+	    },
+
+	    stop: function() {
+	      this.done = true;
+
+	      var rootEntry = this.tryEntries[0];
+	      var rootRecord = rootEntry.completion;
+	      if (rootRecord.type === "throw") {
+	        throw rootRecord.arg;
+	      }
+
+	      return this.rval;
+	    },
+
+	    dispatchException: function(exception) {
+	      if (this.done) {
+	        throw exception;
+	      }
+
+	      var context = this;
+	      function handle(loc, caught) {
+	        record.type = "throw";
+	        record.arg = exception;
+	        context.next = loc;
+
+	        if (caught) {
+	          // If the dispatched exception was caught by a catch block,
+	          // then let that catch block handle the exception normally.
+	          context.method = "next";
+	          context.arg = undefined$1;
+	        }
+
+	        return !! caught;
+	      }
+
+	      for (var i = this.tryEntries.length - 1; i >= 0; --i) {
+	        var entry = this.tryEntries[i];
+	        var record = entry.completion;
+
+	        if (entry.tryLoc === "root") {
+	          // Exception thrown outside of any try block that could handle
+	          // it, so set the completion value of the entire function to
+	          // throw the exception.
+	          return handle("end");
+	        }
+
+	        if (entry.tryLoc <= this.prev) {
+	          var hasCatch = hasOwn.call(entry, "catchLoc");
+	          var hasFinally = hasOwn.call(entry, "finallyLoc");
+
+	          if (hasCatch && hasFinally) {
+	            if (this.prev < entry.catchLoc) {
+	              return handle(entry.catchLoc, true);
+	            } else if (this.prev < entry.finallyLoc) {
+	              return handle(entry.finallyLoc);
+	            }
+
+	          } else if (hasCatch) {
+	            if (this.prev < entry.catchLoc) {
+	              return handle(entry.catchLoc, true);
+	            }
+
+	          } else if (hasFinally) {
+	            if (this.prev < entry.finallyLoc) {
+	              return handle(entry.finallyLoc);
+	            }
+
+	          } else {
+	            throw new Error("try statement without catch or finally");
+	          }
+	        }
+	      }
+	    },
+
+	    abrupt: function(type, arg) {
+	      for (var i = this.tryEntries.length - 1; i >= 0; --i) {
+	        var entry = this.tryEntries[i];
+	        if (entry.tryLoc <= this.prev &&
+	            hasOwn.call(entry, "finallyLoc") &&
+	            this.prev < entry.finallyLoc) {
+	          var finallyEntry = entry;
+	          break;
+	        }
+	      }
+
+	      if (finallyEntry &&
+	          (type === "break" ||
+	           type === "continue") &&
+	          finallyEntry.tryLoc <= arg &&
+	          arg <= finallyEntry.finallyLoc) {
+	        // Ignore the finally entry if control is not jumping to a
+	        // location outside the try/catch block.
+	        finallyEntry = null;
+	      }
+
+	      var record = finallyEntry ? finallyEntry.completion : {};
+	      record.type = type;
+	      record.arg = arg;
+
+	      if (finallyEntry) {
+	        this.method = "next";
+	        this.next = finallyEntry.finallyLoc;
+	        return ContinueSentinel;
+	      }
+
+	      return this.complete(record);
+	    },
+
+	    complete: function(record, afterLoc) {
+	      if (record.type === "throw") {
+	        throw record.arg;
+	      }
+
+	      if (record.type === "break" ||
+	          record.type === "continue") {
+	        this.next = record.arg;
+	      } else if (record.type === "return") {
+	        this.rval = this.arg = record.arg;
+	        this.method = "return";
+	        this.next = "end";
+	      } else if (record.type === "normal" && afterLoc) {
+	        this.next = afterLoc;
+	      }
+
+	      return ContinueSentinel;
+	    },
+
+	    finish: function(finallyLoc) {
+	      for (var i = this.tryEntries.length - 1; i >= 0; --i) {
+	        var entry = this.tryEntries[i];
+	        if (entry.finallyLoc === finallyLoc) {
+	          this.complete(entry.completion, entry.afterLoc);
+	          resetTryEntry(entry);
+	          return ContinueSentinel;
+	        }
+	      }
+	    },
+
+	    "catch": function(tryLoc) {
+	      for (var i = this.tryEntries.length - 1; i >= 0; --i) {
+	        var entry = this.tryEntries[i];
+	        if (entry.tryLoc === tryLoc) {
+	          var record = entry.completion;
+	          if (record.type === "throw") {
+	            var thrown = record.arg;
+	            resetTryEntry(entry);
+	          }
+	          return thrown;
+	        }
+	      }
+
+	      // The context.catch method must only be called with a location
+	      // argument that corresponds to a known catch block.
+	      throw new Error("illegal catch attempt");
+	    },
+
+	    delegateYield: function(iterable, resultName, nextLoc) {
+	      this.delegate = {
+	        iterator: values(iterable),
+	        resultName: resultName,
+	        nextLoc: nextLoc
+	      };
+
+	      if (this.method === "next") {
+	        // Deliberately forget the last sent value so that we don't
+	        // accidentally pass it on to the delegate.
+	        this.arg = undefined$1;
+	      }
+
+	      return ContinueSentinel;
+	    }
+	  };
+
+	  // Regardless of whether this script is executing as a CommonJS module
+	  // or not, return the runtime object so that we can declare the variable
+	  // regeneratorRuntime in the outer scope, which allows this module to be
+	  // injected easily by `bin/regenerator --include-runtime script.js`.
+	  return exports;
+
+	}(
+	  // If this script is executing as a CommonJS module, use module.exports
+	  // as the regeneratorRuntime namespace. Otherwise create a new empty
+	  // object. Either way, the resulting object will be used to initialize
+	  // the regeneratorRuntime variable at the top of this file.
+	   module.exports 
+	));
+
+	try {
+	  regeneratorRuntime = runtime;
+	} catch (accidentalStrictMode) {
+	  // This module should not be running in strict mode, so the above
+	  // assignment should always work unless something is misconfigured. Just
+	  // in case runtime.js accidentally runs in strict mode, we can escape
+	  // strict mode using a global Function call. This could conceivably fail
+	  // if a Content Security Policy forbids using Function, but in that case
+	  // the proper solution is to fix the accidental strict mode problem. If
+	  // you've misconfigured your bundler to force strict mode and applied a
+	  // CSP to forbid Function, and you're not willing to fix either of those
+	  // problems, please detail your unique predicament in a GitHub issue.
+	  Function("r", "regeneratorRuntime = r")(runtime);
 	}
-
-	function _arrayWithoutHoles(arr) {
-	  if (Array.isArray(arr)) return _arrayLikeToArray(arr);
-	}
-
-	function _iterableToArray(iter) {
-	  if (typeof Symbol !== "undefined" && Symbol.iterator in Object(iter)) return Array.from(iter);
-	}
-
-	function _unsupportedIterableToArray(o, minLen) {
-	  if (!o) return;
-	  if (typeof o === "string") return _arrayLikeToArray(o, minLen);
-	  var n = Object.prototype.toString.call(o).slice(8, -1);
-	  if (n === "Object" && o.constructor) n = o.constructor.name;
-	  if (n === "Map" || n === "Set") return Array.from(o);
-	  if (n === "Arguments" || /^(?:Ui|I)nt(?:8|16|32)(?:Clamped)?Array$/.test(n)) return _arrayLikeToArray(o, minLen);
-	}
-
-	function _arrayLikeToArray(arr, len) {
-	  if (len == null || len > arr.length) len = arr.length;
-
-	  for (var i = 0, arr2 = new Array(len); i < len; i++) arr2[i] = arr[i];
-
-	  return arr2;
-	}
-
-	function _nonIterableSpread() {
-	  throw new TypeError("Invalid attempt to spread non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method.");
-	}
+	});
 
 	var dist = createCommonjsModule(function (module, exports) {
 	(function (global, factory) {
@@ -4170,259 +4887,6 @@
 	  isArray: isArray
 	});
 
-	var UNSCOPABLES = wellKnownSymbol('unscopables');
-	var ArrayPrototype = Array.prototype;
-
-	// Array.prototype[@@unscopables]
-	// https://tc39.github.io/ecma262/#sec-array.prototype-@@unscopables
-	if (ArrayPrototype[UNSCOPABLES] == undefined) {
-	  objectDefineProperty.f(ArrayPrototype, UNSCOPABLES, {
-	    configurable: true,
-	    value: objectCreate(null)
-	  });
-	}
-
-	// add a key to Array.prototype[@@unscopables]
-	var addToUnscopables = function (key) {
-	  ArrayPrototype[UNSCOPABLES][key] = true;
-	};
-
-	var iterators = {};
-
-	var correctPrototypeGetter = !fails(function () {
-	  function F() { /* empty */ }
-	  F.prototype.constructor = null;
-	  return Object.getPrototypeOf(new F()) !== F.prototype;
-	});
-
-	var IE_PROTO$1 = sharedKey('IE_PROTO');
-	var ObjectPrototype$1 = Object.prototype;
-
-	// `Object.getPrototypeOf` method
-	// https://tc39.github.io/ecma262/#sec-object.getprototypeof
-	var objectGetPrototypeOf = correctPrototypeGetter ? Object.getPrototypeOf : function (O) {
-	  O = toObject(O);
-	  if (has(O, IE_PROTO$1)) return O[IE_PROTO$1];
-	  if (typeof O.constructor == 'function' && O instanceof O.constructor) {
-	    return O.constructor.prototype;
-	  } return O instanceof Object ? ObjectPrototype$1 : null;
-	};
-
-	var ITERATOR = wellKnownSymbol('iterator');
-	var BUGGY_SAFARI_ITERATORS = false;
-
-	var returnThis = function () { return this; };
-
-	// `%IteratorPrototype%` object
-	// https://tc39.github.io/ecma262/#sec-%iteratorprototype%-object
-	var IteratorPrototype, PrototypeOfArrayIteratorPrototype, arrayIterator;
-
-	if ([].keys) {
-	  arrayIterator = [].keys();
-	  // Safari 8 has buggy iterators w/o `next`
-	  if (!('next' in arrayIterator)) BUGGY_SAFARI_ITERATORS = true;
-	  else {
-	    PrototypeOfArrayIteratorPrototype = objectGetPrototypeOf(objectGetPrototypeOf(arrayIterator));
-	    if (PrototypeOfArrayIteratorPrototype !== Object.prototype) IteratorPrototype = PrototypeOfArrayIteratorPrototype;
-	  }
-	}
-
-	if (IteratorPrototype == undefined) IteratorPrototype = {};
-
-	// 25.1.2.1.1 %IteratorPrototype%[@@iterator]()
-	if ( !has(IteratorPrototype, ITERATOR)) {
-	  createNonEnumerableProperty(IteratorPrototype, ITERATOR, returnThis);
-	}
-
-	var iteratorsCore = {
-	  IteratorPrototype: IteratorPrototype,
-	  BUGGY_SAFARI_ITERATORS: BUGGY_SAFARI_ITERATORS
-	};
-
-	var IteratorPrototype$1 = iteratorsCore.IteratorPrototype;
-
-
-
-
-
-	var returnThis$1 = function () { return this; };
-
-	var createIteratorConstructor = function (IteratorConstructor, NAME, next) {
-	  var TO_STRING_TAG = NAME + ' Iterator';
-	  IteratorConstructor.prototype = objectCreate(IteratorPrototype$1, { next: createPropertyDescriptor(1, next) });
-	  setToStringTag(IteratorConstructor, TO_STRING_TAG, false);
-	  iterators[TO_STRING_TAG] = returnThis$1;
-	  return IteratorConstructor;
-	};
-
-	var aPossiblePrototype = function (it) {
-	  if (!isObject(it) && it !== null) {
-	    throw TypeError("Can't set " + String(it) + ' as a prototype');
-	  } return it;
-	};
-
-	// `Object.setPrototypeOf` method
-	// https://tc39.github.io/ecma262/#sec-object.setprototypeof
-	// Works with __proto__ only. Old v8 can't work with null proto objects.
-	/* eslint-disable no-proto */
-	var objectSetPrototypeOf = Object.setPrototypeOf || ('__proto__' in {} ? function () {
-	  var CORRECT_SETTER = false;
-	  var test = {};
-	  var setter;
-	  try {
-	    setter = Object.getOwnPropertyDescriptor(Object.prototype, '__proto__').set;
-	    setter.call(test, []);
-	    CORRECT_SETTER = test instanceof Array;
-	  } catch (error) { /* empty */ }
-	  return function setPrototypeOf(O, proto) {
-	    anObject(O);
-	    aPossiblePrototype(proto);
-	    if (CORRECT_SETTER) setter.call(O, proto);
-	    else O.__proto__ = proto;
-	    return O;
-	  };
-	}() : undefined);
-
-	var IteratorPrototype$2 = iteratorsCore.IteratorPrototype;
-	var BUGGY_SAFARI_ITERATORS$1 = iteratorsCore.BUGGY_SAFARI_ITERATORS;
-	var ITERATOR$1 = wellKnownSymbol('iterator');
-	var KEYS = 'keys';
-	var VALUES = 'values';
-	var ENTRIES = 'entries';
-
-	var returnThis$2 = function () { return this; };
-
-	var defineIterator = function (Iterable, NAME, IteratorConstructor, next, DEFAULT, IS_SET, FORCED) {
-	  createIteratorConstructor(IteratorConstructor, NAME, next);
-
-	  var getIterationMethod = function (KIND) {
-	    if (KIND === DEFAULT && defaultIterator) return defaultIterator;
-	    if (!BUGGY_SAFARI_ITERATORS$1 && KIND in IterablePrototype) return IterablePrototype[KIND];
-	    switch (KIND) {
-	      case KEYS: return function keys() { return new IteratorConstructor(this, KIND); };
-	      case VALUES: return function values() { return new IteratorConstructor(this, KIND); };
-	      case ENTRIES: return function entries() { return new IteratorConstructor(this, KIND); };
-	    } return function () { return new IteratorConstructor(this); };
-	  };
-
-	  var TO_STRING_TAG = NAME + ' Iterator';
-	  var INCORRECT_VALUES_NAME = false;
-	  var IterablePrototype = Iterable.prototype;
-	  var nativeIterator = IterablePrototype[ITERATOR$1]
-	    || IterablePrototype['@@iterator']
-	    || DEFAULT && IterablePrototype[DEFAULT];
-	  var defaultIterator = !BUGGY_SAFARI_ITERATORS$1 && nativeIterator || getIterationMethod(DEFAULT);
-	  var anyNativeIterator = NAME == 'Array' ? IterablePrototype.entries || nativeIterator : nativeIterator;
-	  var CurrentIteratorPrototype, methods, KEY;
-
-	  // fix native
-	  if (anyNativeIterator) {
-	    CurrentIteratorPrototype = objectGetPrototypeOf(anyNativeIterator.call(new Iterable()));
-	    if (IteratorPrototype$2 !== Object.prototype && CurrentIteratorPrototype.next) {
-	      if ( objectGetPrototypeOf(CurrentIteratorPrototype) !== IteratorPrototype$2) {
-	        if (objectSetPrototypeOf) {
-	          objectSetPrototypeOf(CurrentIteratorPrototype, IteratorPrototype$2);
-	        } else if (typeof CurrentIteratorPrototype[ITERATOR$1] != 'function') {
-	          createNonEnumerableProperty(CurrentIteratorPrototype, ITERATOR$1, returnThis$2);
-	        }
-	      }
-	      // Set @@toStringTag to native iterators
-	      setToStringTag(CurrentIteratorPrototype, TO_STRING_TAG, true);
-	    }
-	  }
-
-	  // fix Array#{values, @@iterator}.name in V8 / FF
-	  if (DEFAULT == VALUES && nativeIterator && nativeIterator.name !== VALUES) {
-	    INCORRECT_VALUES_NAME = true;
-	    defaultIterator = function values() { return nativeIterator.call(this); };
-	  }
-
-	  // define iterator
-	  if ( IterablePrototype[ITERATOR$1] !== defaultIterator) {
-	    createNonEnumerableProperty(IterablePrototype, ITERATOR$1, defaultIterator);
-	  }
-	  iterators[NAME] = defaultIterator;
-
-	  // export additional methods
-	  if (DEFAULT) {
-	    methods = {
-	      values: getIterationMethod(VALUES),
-	      keys: IS_SET ? defaultIterator : getIterationMethod(KEYS),
-	      entries: getIterationMethod(ENTRIES)
-	    };
-	    if (FORCED) for (KEY in methods) {
-	      if (BUGGY_SAFARI_ITERATORS$1 || INCORRECT_VALUES_NAME || !(KEY in IterablePrototype)) {
-	        redefine(IterablePrototype, KEY, methods[KEY]);
-	      }
-	    } else _export({ target: NAME, proto: true, forced: BUGGY_SAFARI_ITERATORS$1 || INCORRECT_VALUES_NAME }, methods);
-	  }
-
-	  return methods;
-	};
-
-	var ARRAY_ITERATOR = 'Array Iterator';
-	var setInternalState$1 = internalState.set;
-	var getInternalState$1 = internalState.getterFor(ARRAY_ITERATOR);
-
-	// `Array.prototype.entries` method
-	// https://tc39.github.io/ecma262/#sec-array.prototype.entries
-	// `Array.prototype.keys` method
-	// https://tc39.github.io/ecma262/#sec-array.prototype.keys
-	// `Array.prototype.values` method
-	// https://tc39.github.io/ecma262/#sec-array.prototype.values
-	// `Array.prototype[@@iterator]` method
-	// https://tc39.github.io/ecma262/#sec-array.prototype-@@iterator
-	// `CreateArrayIterator` internal method
-	// https://tc39.github.io/ecma262/#sec-createarrayiterator
-	var es_array_iterator = defineIterator(Array, 'Array', function (iterated, kind) {
-	  setInternalState$1(this, {
-	    type: ARRAY_ITERATOR,
-	    target: toIndexedObject(iterated), // target
-	    index: 0,                          // next index
-	    kind: kind                         // kind
-	  });
-	// `%ArrayIteratorPrototype%.next` method
-	// https://tc39.github.io/ecma262/#sec-%arrayiteratorprototype%.next
-	}, function () {
-	  var state = getInternalState$1(this);
-	  var target = state.target;
-	  var kind = state.kind;
-	  var index = state.index++;
-	  if (!target || index >= target.length) {
-	    state.target = undefined;
-	    return { value: undefined, done: true };
-	  }
-	  if (kind == 'keys') return { value: index, done: false };
-	  if (kind == 'values') return { value: target[index], done: false };
-	  return { value: [index, target[index]], done: false };
-	}, 'values');
-
-	// argumentsList[@@iterator] is %ArrayProto_values%
-	// https://tc39.github.io/ecma262/#sec-createunmappedargumentsobject
-	// https://tc39.github.io/ecma262/#sec-createmappedargumentsobject
-	iterators.Arguments = iterators.Array;
-
-	// https://tc39.github.io/ecma262/#sec-array.prototype-@@unscopables
-	addToUnscopables('keys');
-	addToUnscopables('values');
-	addToUnscopables('entries');
-
-	var DatePrototype = Date.prototype;
-	var INVALID_DATE = 'Invalid Date';
-	var TO_STRING = 'toString';
-	var nativeDateToString = DatePrototype[TO_STRING];
-	var getTime = DatePrototype.getTime;
-
-	// `Date.prototype.toString` method
-	// https://tc39.github.io/ecma262/#sec-date.prototype.tostring
-	if (new Date(NaN) + '' != INVALID_DATE) {
-	  redefine(DatePrototype, TO_STRING, function toString() {
-	    var value = getTime.call(this);
-	    // eslint-disable-next-line no-self-compare
-	    return value === value ? nativeDateToString.call(this) : INVALID_DATE;
-	  });
-	}
-
 	var defineProperty$4 = objectDefineProperty.f;
 
 	var FunctionPrototype = Function.prototype;
@@ -4487,589 +4951,6 @@
 	  redefine(Object.prototype, 'toString', objectToString, { unsafe: true });
 	}
 
-	// `RegExp.prototype.flags` getter implementation
-	// https://tc39.github.io/ecma262/#sec-get-regexp.prototype.flags
-	var regexpFlags = function () {
-	  var that = anObject(this);
-	  var result = '';
-	  if (that.global) result += 'g';
-	  if (that.ignoreCase) result += 'i';
-	  if (that.multiline) result += 'm';
-	  if (that.dotAll) result += 's';
-	  if (that.unicode) result += 'u';
-	  if (that.sticky) result += 'y';
-	  return result;
-	};
-
-	var TO_STRING$1 = 'toString';
-	var RegExpPrototype = RegExp.prototype;
-	var nativeToString = RegExpPrototype[TO_STRING$1];
-
-	var NOT_GENERIC = fails(function () { return nativeToString.call({ source: 'a', flags: 'b' }) != '/a/b'; });
-	// FF44- RegExp#toString has a wrong name
-	var INCORRECT_NAME = nativeToString.name != TO_STRING$1;
-
-	// `RegExp.prototype.toString` method
-	// https://tc39.github.io/ecma262/#sec-regexp.prototype.tostring
-	if (NOT_GENERIC || INCORRECT_NAME) {
-	  redefine(RegExp.prototype, TO_STRING$1, function toString() {
-	    var R = anObject(this);
-	    var p = String(R.source);
-	    var rf = R.flags;
-	    var f = String(rf === undefined && R instanceof RegExp && !('flags' in RegExpPrototype) ? regexpFlags.call(R) : rf);
-	    return '/' + p + '/' + f;
-	  }, { unsafe: true });
-	}
-
-	var freezing = !fails(function () {
-	  return Object.isExtensible(Object.preventExtensions({}));
-	});
-
-	var internalMetadata = createCommonjsModule(function (module) {
-	var defineProperty = objectDefineProperty.f;
-
-
-
-	var METADATA = uid('meta');
-	var id = 0;
-
-	var isExtensible = Object.isExtensible || function () {
-	  return true;
-	};
-
-	var setMetadata = function (it) {
-	  defineProperty(it, METADATA, { value: {
-	    objectID: 'O' + ++id, // object ID
-	    weakData: {}          // weak collections IDs
-	  } });
-	};
-
-	var fastKey = function (it, create) {
-	  // return a primitive with prefix
-	  if (!isObject(it)) return typeof it == 'symbol' ? it : (typeof it == 'string' ? 'S' : 'P') + it;
-	  if (!has(it, METADATA)) {
-	    // can't set metadata to uncaught frozen object
-	    if (!isExtensible(it)) return 'F';
-	    // not necessary to add metadata
-	    if (!create) return 'E';
-	    // add missing metadata
-	    setMetadata(it);
-	  // return object ID
-	  } return it[METADATA].objectID;
-	};
-
-	var getWeakData = function (it, create) {
-	  if (!has(it, METADATA)) {
-	    // can't set metadata to uncaught frozen object
-	    if (!isExtensible(it)) return true;
-	    // not necessary to add metadata
-	    if (!create) return false;
-	    // add missing metadata
-	    setMetadata(it);
-	  // return the store of weak collections IDs
-	  } return it[METADATA].weakData;
-	};
-
-	// add metadata on freeze-family methods calling
-	var onFreeze = function (it) {
-	  if (freezing && meta.REQUIRED && isExtensible(it) && !has(it, METADATA)) setMetadata(it);
-	  return it;
-	};
-
-	var meta = module.exports = {
-	  REQUIRED: false,
-	  fastKey: fastKey,
-	  getWeakData: getWeakData,
-	  onFreeze: onFreeze
-	};
-
-	hiddenKeys[METADATA] = true;
-	});
-
-	var ITERATOR$2 = wellKnownSymbol('iterator');
-	var ArrayPrototype$1 = Array.prototype;
-
-	// check on default Array iterator
-	var isArrayIteratorMethod = function (it) {
-	  return it !== undefined && (iterators.Array === it || ArrayPrototype$1[ITERATOR$2] === it);
-	};
-
-	var ITERATOR$3 = wellKnownSymbol('iterator');
-
-	var getIteratorMethod = function (it) {
-	  if (it != undefined) return it[ITERATOR$3]
-	    || it['@@iterator']
-	    || iterators[classof(it)];
-	};
-
-	var iteratorClose = function (iterator) {
-	  var returnMethod = iterator['return'];
-	  if (returnMethod !== undefined) {
-	    return anObject(returnMethod.call(iterator)).value;
-	  }
-	};
-
-	var Result = function (stopped, result) {
-	  this.stopped = stopped;
-	  this.result = result;
-	};
-
-	var iterate = function (iterable, unboundFunction, options) {
-	  var that = options && options.that;
-	  var AS_ENTRIES = !!(options && options.AS_ENTRIES);
-	  var IS_ITERATOR = !!(options && options.IS_ITERATOR);
-	  var INTERRUPTED = !!(options && options.INTERRUPTED);
-	  var fn = functionBindContext(unboundFunction, that, 1 + AS_ENTRIES + INTERRUPTED);
-	  var iterator, iterFn, index, length, result, next, step;
-
-	  var stop = function (condition) {
-	    if (iterator) iteratorClose(iterator);
-	    return new Result(true, condition);
-	  };
-
-	  var callFn = function (value) {
-	    if (AS_ENTRIES) {
-	      anObject(value);
-	      return INTERRUPTED ? fn(value[0], value[1], stop) : fn(value[0], value[1]);
-	    } return INTERRUPTED ? fn(value, stop) : fn(value);
-	  };
-
-	  if (IS_ITERATOR) {
-	    iterator = iterable;
-	  } else {
-	    iterFn = getIteratorMethod(iterable);
-	    if (typeof iterFn != 'function') throw TypeError('Target is not iterable');
-	    // optimisation for array iterators
-	    if (isArrayIteratorMethod(iterFn)) {
-	      for (index = 0, length = toLength(iterable.length); length > index; index++) {
-	        result = callFn(iterable[index]);
-	        if (result && result instanceof Result) return result;
-	      } return new Result(false);
-	    }
-	    iterator = iterFn.call(iterable);
-	  }
-
-	  next = iterator.next;
-	  while (!(step = next.call(iterator)).done) {
-	    try {
-	      result = callFn(step.value);
-	    } catch (error) {
-	      iteratorClose(iterator);
-	      throw error;
-	    }
-	    if (typeof result == 'object' && result && result instanceof Result) return result;
-	  } return new Result(false);
-	};
-
-	var anInstance = function (it, Constructor, name) {
-	  if (!(it instanceof Constructor)) {
-	    throw TypeError('Incorrect ' + (name ? name + ' ' : '') + 'invocation');
-	  } return it;
-	};
-
-	var ITERATOR$4 = wellKnownSymbol('iterator');
-	var SAFE_CLOSING = false;
-
-	try {
-	  var called = 0;
-	  var iteratorWithReturn = {
-	    next: function () {
-	      return { done: !!called++ };
-	    },
-	    'return': function () {
-	      SAFE_CLOSING = true;
-	    }
-	  };
-	  iteratorWithReturn[ITERATOR$4] = function () {
-	    return this;
-	  };
-	  // eslint-disable-next-line no-throw-literal
-	  Array.from(iteratorWithReturn, function () { throw 2; });
-	} catch (error) { /* empty */ }
-
-	var checkCorrectnessOfIteration = function (exec, SKIP_CLOSING) {
-	  if (!SKIP_CLOSING && !SAFE_CLOSING) return false;
-	  var ITERATION_SUPPORT = false;
-	  try {
-	    var object = {};
-	    object[ITERATOR$4] = function () {
-	      return {
-	        next: function () {
-	          return { done: ITERATION_SUPPORT = true };
-	        }
-	      };
-	    };
-	    exec(object);
-	  } catch (error) { /* empty */ }
-	  return ITERATION_SUPPORT;
-	};
-
-	// makes subclassing work correct for wrapped built-ins
-	var inheritIfRequired = function ($this, dummy, Wrapper) {
-	  var NewTarget, NewTargetPrototype;
-	  if (
-	    // it can work only with native `setPrototypeOf`
-	    objectSetPrototypeOf &&
-	    // we haven't completely correct pre-ES6 way for getting `new.target`, so use this
-	    typeof (NewTarget = dummy.constructor) == 'function' &&
-	    NewTarget !== Wrapper &&
-	    isObject(NewTargetPrototype = NewTarget.prototype) &&
-	    NewTargetPrototype !== Wrapper.prototype
-	  ) objectSetPrototypeOf($this, NewTargetPrototype);
-	  return $this;
-	};
-
-	var collection = function (CONSTRUCTOR_NAME, wrapper, common) {
-	  var IS_MAP = CONSTRUCTOR_NAME.indexOf('Map') !== -1;
-	  var IS_WEAK = CONSTRUCTOR_NAME.indexOf('Weak') !== -1;
-	  var ADDER = IS_MAP ? 'set' : 'add';
-	  var NativeConstructor = global_1[CONSTRUCTOR_NAME];
-	  var NativePrototype = NativeConstructor && NativeConstructor.prototype;
-	  var Constructor = NativeConstructor;
-	  var exported = {};
-
-	  var fixMethod = function (KEY) {
-	    var nativeMethod = NativePrototype[KEY];
-	    redefine(NativePrototype, KEY,
-	      KEY == 'add' ? function add(value) {
-	        nativeMethod.call(this, value === 0 ? 0 : value);
-	        return this;
-	      } : KEY == 'delete' ? function (key) {
-	        return IS_WEAK && !isObject(key) ? false : nativeMethod.call(this, key === 0 ? 0 : key);
-	      } : KEY == 'get' ? function get(key) {
-	        return IS_WEAK && !isObject(key) ? undefined : nativeMethod.call(this, key === 0 ? 0 : key);
-	      } : KEY == 'has' ? function has(key) {
-	        return IS_WEAK && !isObject(key) ? false : nativeMethod.call(this, key === 0 ? 0 : key);
-	      } : function set(key, value) {
-	        nativeMethod.call(this, key === 0 ? 0 : key, value);
-	        return this;
-	      }
-	    );
-	  };
-
-	  // eslint-disable-next-line max-len
-	  if (isForced_1(CONSTRUCTOR_NAME, typeof NativeConstructor != 'function' || !(IS_WEAK || NativePrototype.forEach && !fails(function () {
-	    new NativeConstructor().entries().next();
-	  })))) {
-	    // create collection constructor
-	    Constructor = common.getConstructor(wrapper, CONSTRUCTOR_NAME, IS_MAP, ADDER);
-	    internalMetadata.REQUIRED = true;
-	  } else if (isForced_1(CONSTRUCTOR_NAME, true)) {
-	    var instance = new Constructor();
-	    // early implementations not supports chaining
-	    var HASNT_CHAINING = instance[ADDER](IS_WEAK ? {} : -0, 1) != instance;
-	    // V8 ~ Chromium 40- weak-collections throws on primitives, but should return false
-	    var THROWS_ON_PRIMITIVES = fails(function () { instance.has(1); });
-	    // most early implementations doesn't supports iterables, most modern - not close it correctly
-	    // eslint-disable-next-line no-new
-	    var ACCEPT_ITERABLES = checkCorrectnessOfIteration(function (iterable) { new NativeConstructor(iterable); });
-	    // for early implementations -0 and +0 not the same
-	    var BUGGY_ZERO = !IS_WEAK && fails(function () {
-	      // V8 ~ Chromium 42- fails only with 5+ elements
-	      var $instance = new NativeConstructor();
-	      var index = 5;
-	      while (index--) $instance[ADDER](index, index);
-	      return !$instance.has(-0);
-	    });
-
-	    if (!ACCEPT_ITERABLES) {
-	      Constructor = wrapper(function (dummy, iterable) {
-	        anInstance(dummy, Constructor, CONSTRUCTOR_NAME);
-	        var that = inheritIfRequired(new NativeConstructor(), dummy, Constructor);
-	        if (iterable != undefined) iterate(iterable, that[ADDER], { that: that, AS_ENTRIES: IS_MAP });
-	        return that;
-	      });
-	      Constructor.prototype = NativePrototype;
-	      NativePrototype.constructor = Constructor;
-	    }
-
-	    if (THROWS_ON_PRIMITIVES || BUGGY_ZERO) {
-	      fixMethod('delete');
-	      fixMethod('has');
-	      IS_MAP && fixMethod('get');
-	    }
-
-	    if (BUGGY_ZERO || HASNT_CHAINING) fixMethod(ADDER);
-
-	    // weak collections should not contains .clear method
-	    if (IS_WEAK && NativePrototype.clear) delete NativePrototype.clear;
-	  }
-
-	  exported[CONSTRUCTOR_NAME] = Constructor;
-	  _export({ global: true, forced: Constructor != NativeConstructor }, exported);
-
-	  setToStringTag(Constructor, CONSTRUCTOR_NAME);
-
-	  if (!IS_WEAK) common.setStrong(Constructor, CONSTRUCTOR_NAME, IS_MAP);
-
-	  return Constructor;
-	};
-
-	var redefineAll = function (target, src, options) {
-	  for (var key in src) redefine(target, key, src[key], options);
-	  return target;
-	};
-
-	var SPECIES$2 = wellKnownSymbol('species');
-
-	var setSpecies = function (CONSTRUCTOR_NAME) {
-	  var Constructor = getBuiltIn(CONSTRUCTOR_NAME);
-	  var defineProperty = objectDefineProperty.f;
-
-	  if (descriptors && Constructor && !Constructor[SPECIES$2]) {
-	    defineProperty(Constructor, SPECIES$2, {
-	      configurable: true,
-	      get: function () { return this; }
-	    });
-	  }
-	};
-
-	var defineProperty$5 = objectDefineProperty.f;
-
-
-
-
-
-
-
-
-	var fastKey = internalMetadata.fastKey;
-
-
-	var setInternalState$2 = internalState.set;
-	var internalStateGetterFor = internalState.getterFor;
-
-	var collectionStrong = {
-	  getConstructor: function (wrapper, CONSTRUCTOR_NAME, IS_MAP, ADDER) {
-	    var C = wrapper(function (that, iterable) {
-	      anInstance(that, C, CONSTRUCTOR_NAME);
-	      setInternalState$2(that, {
-	        type: CONSTRUCTOR_NAME,
-	        index: objectCreate(null),
-	        first: undefined,
-	        last: undefined,
-	        size: 0
-	      });
-	      if (!descriptors) that.size = 0;
-	      if (iterable != undefined) iterate(iterable, that[ADDER], { that: that, AS_ENTRIES: IS_MAP });
-	    });
-
-	    var getInternalState = internalStateGetterFor(CONSTRUCTOR_NAME);
-
-	    var define = function (that, key, value) {
-	      var state = getInternalState(that);
-	      var entry = getEntry(that, key);
-	      var previous, index;
-	      // change existing entry
-	      if (entry) {
-	        entry.value = value;
-	      // create new entry
-	      } else {
-	        state.last = entry = {
-	          index: index = fastKey(key, true),
-	          key: key,
-	          value: value,
-	          previous: previous = state.last,
-	          next: undefined,
-	          removed: false
-	        };
-	        if (!state.first) state.first = entry;
-	        if (previous) previous.next = entry;
-	        if (descriptors) state.size++;
-	        else that.size++;
-	        // add to index
-	        if (index !== 'F') state.index[index] = entry;
-	      } return that;
-	    };
-
-	    var getEntry = function (that, key) {
-	      var state = getInternalState(that);
-	      // fast case
-	      var index = fastKey(key);
-	      var entry;
-	      if (index !== 'F') return state.index[index];
-	      // frozen object case
-	      for (entry = state.first; entry; entry = entry.next) {
-	        if (entry.key == key) return entry;
-	      }
-	    };
-
-	    redefineAll(C.prototype, {
-	      // 23.1.3.1 Map.prototype.clear()
-	      // 23.2.3.2 Set.prototype.clear()
-	      clear: function clear() {
-	        var that = this;
-	        var state = getInternalState(that);
-	        var data = state.index;
-	        var entry = state.first;
-	        while (entry) {
-	          entry.removed = true;
-	          if (entry.previous) entry.previous = entry.previous.next = undefined;
-	          delete data[entry.index];
-	          entry = entry.next;
-	        }
-	        state.first = state.last = undefined;
-	        if (descriptors) state.size = 0;
-	        else that.size = 0;
-	      },
-	      // 23.1.3.3 Map.prototype.delete(key)
-	      // 23.2.3.4 Set.prototype.delete(value)
-	      'delete': function (key) {
-	        var that = this;
-	        var state = getInternalState(that);
-	        var entry = getEntry(that, key);
-	        if (entry) {
-	          var next = entry.next;
-	          var prev = entry.previous;
-	          delete state.index[entry.index];
-	          entry.removed = true;
-	          if (prev) prev.next = next;
-	          if (next) next.previous = prev;
-	          if (state.first == entry) state.first = next;
-	          if (state.last == entry) state.last = prev;
-	          if (descriptors) state.size--;
-	          else that.size--;
-	        } return !!entry;
-	      },
-	      // 23.2.3.6 Set.prototype.forEach(callbackfn, thisArg = undefined)
-	      // 23.1.3.5 Map.prototype.forEach(callbackfn, thisArg = undefined)
-	      forEach: function forEach(callbackfn /* , that = undefined */) {
-	        var state = getInternalState(this);
-	        var boundFunction = functionBindContext(callbackfn, arguments.length > 1 ? arguments[1] : undefined, 3);
-	        var entry;
-	        while (entry = entry ? entry.next : state.first) {
-	          boundFunction(entry.value, entry.key, this);
-	          // revert to the last existing entry
-	          while (entry && entry.removed) entry = entry.previous;
-	        }
-	      },
-	      // 23.1.3.7 Map.prototype.has(key)
-	      // 23.2.3.7 Set.prototype.has(value)
-	      has: function has(key) {
-	        return !!getEntry(this, key);
-	      }
-	    });
-
-	    redefineAll(C.prototype, IS_MAP ? {
-	      // 23.1.3.6 Map.prototype.get(key)
-	      get: function get(key) {
-	        var entry = getEntry(this, key);
-	        return entry && entry.value;
-	      },
-	      // 23.1.3.9 Map.prototype.set(key, value)
-	      set: function set(key, value) {
-	        return define(this, key === 0 ? 0 : key, value);
-	      }
-	    } : {
-	      // 23.2.3.1 Set.prototype.add(value)
-	      add: function add(value) {
-	        return define(this, value = value === 0 ? 0 : value, value);
-	      }
-	    });
-	    if (descriptors) defineProperty$5(C.prototype, 'size', {
-	      get: function () {
-	        return getInternalState(this).size;
-	      }
-	    });
-	    return C;
-	  },
-	  setStrong: function (C, CONSTRUCTOR_NAME, IS_MAP) {
-	    var ITERATOR_NAME = CONSTRUCTOR_NAME + ' Iterator';
-	    var getInternalCollectionState = internalStateGetterFor(CONSTRUCTOR_NAME);
-	    var getInternalIteratorState = internalStateGetterFor(ITERATOR_NAME);
-	    // add .keys, .values, .entries, [@@iterator]
-	    // 23.1.3.4, 23.1.3.8, 23.1.3.11, 23.1.3.12, 23.2.3.5, 23.2.3.8, 23.2.3.10, 23.2.3.11
-	    defineIterator(C, CONSTRUCTOR_NAME, function (iterated, kind) {
-	      setInternalState$2(this, {
-	        type: ITERATOR_NAME,
-	        target: iterated,
-	        state: getInternalCollectionState(iterated),
-	        kind: kind,
-	        last: undefined
-	      });
-	    }, function () {
-	      var state = getInternalIteratorState(this);
-	      var kind = state.kind;
-	      var entry = state.last;
-	      // revert to the last existing entry
-	      while (entry && entry.removed) entry = entry.previous;
-	      // get next entry
-	      if (!state.target || !(state.last = entry = entry ? entry.next : state.state.first)) {
-	        // or finish the iteration
-	        state.target = undefined;
-	        return { value: undefined, done: true };
-	      }
-	      // return step by kind
-	      if (kind == 'keys') return { value: entry.key, done: false };
-	      if (kind == 'values') return { value: entry.value, done: false };
-	      return { value: [entry.key, entry.value], done: false };
-	    }, IS_MAP ? 'entries' : 'values', !IS_MAP, true);
-
-	    // add [@@species], 23.1.2.2, 23.2.2.2
-	    setSpecies(CONSTRUCTOR_NAME);
-	  }
-	};
-
-	// `Set` constructor
-	// https://tc39.github.io/ecma262/#sec-set-objects
-	var es_set = collection('Set', function (init) {
-	  return function Set() { return init(this, arguments.length ? arguments[0] : undefined); };
-	}, collectionStrong);
-
-	// `String.prototype.{ codePointAt, at }` methods implementation
-	var createMethod$2 = function (CONVERT_TO_STRING) {
-	  return function ($this, pos) {
-	    var S = String(requireObjectCoercible($this));
-	    var position = toInteger(pos);
-	    var size = S.length;
-	    var first, second;
-	    if (position < 0 || position >= size) return CONVERT_TO_STRING ? '' : undefined;
-	    first = S.charCodeAt(position);
-	    return first < 0xD800 || first > 0xDBFF || position + 1 === size
-	      || (second = S.charCodeAt(position + 1)) < 0xDC00 || second > 0xDFFF
-	        ? CONVERT_TO_STRING ? S.charAt(position) : first
-	        : CONVERT_TO_STRING ? S.slice(position, position + 2) : (first - 0xD800 << 10) + (second - 0xDC00) + 0x10000;
-	  };
-	};
-
-	var stringMultibyte = {
-	  // `String.prototype.codePointAt` method
-	  // https://tc39.github.io/ecma262/#sec-string.prototype.codepointat
-	  codeAt: createMethod$2(false),
-	  // `String.prototype.at` method
-	  // https://github.com/mathiasbynens/String.prototype.at
-	  charAt: createMethod$2(true)
-	};
-
-	var charAt = stringMultibyte.charAt;
-
-
-
-	var STRING_ITERATOR = 'String Iterator';
-	var setInternalState$3 = internalState.set;
-	var getInternalState$2 = internalState.getterFor(STRING_ITERATOR);
-
-	// `String.prototype[@@iterator]` method
-	// https://tc39.github.io/ecma262/#sec-string.prototype-@@iterator
-	defineIterator(String, 'String', function (iterated) {
-	  setInternalState$3(this, {
-	    type: STRING_ITERATOR,
-	    string: String(iterated),
-	    index: 0
-	  });
-	// `%StringIteratorPrototype%.next` method
-	// https://tc39.github.io/ecma262/#sec-%stringiteratorprototype%.next
-	}, function next() {
-	  var state = getInternalState$2(this);
-	  var string = state.string;
-	  var index = state.index;
-	  var point;
-	  if (index >= string.length) return { value: undefined, done: true };
-	  point = charAt(string, index);
-	  state.index += point.length;
-	  return { value: point, done: false };
-	});
-
 	// iterable DOM collections
 	// flag - `iterable` interface - 'entries', 'keys', 'values', 'forEach' methods
 	var domIterables = {
@@ -5117,784 +4998,6 @@
 	  }
 	}
 
-	var ITERATOR$5 = wellKnownSymbol('iterator');
-	var TO_STRING_TAG$3 = wellKnownSymbol('toStringTag');
-	var ArrayValues = es_array_iterator.values;
-
-	for (var COLLECTION_NAME$1 in domIterables) {
-	  var Collection$1 = global_1[COLLECTION_NAME$1];
-	  var CollectionPrototype$1 = Collection$1 && Collection$1.prototype;
-	  if (CollectionPrototype$1) {
-	    // some Chrome versions have non-configurable methods on DOMTokenList
-	    if (CollectionPrototype$1[ITERATOR$5] !== ArrayValues) try {
-	      createNonEnumerableProperty(CollectionPrototype$1, ITERATOR$5, ArrayValues);
-	    } catch (error) {
-	      CollectionPrototype$1[ITERATOR$5] = ArrayValues;
-	    }
-	    if (!CollectionPrototype$1[TO_STRING_TAG$3]) {
-	      createNonEnumerableProperty(CollectionPrototype$1, TO_STRING_TAG$3, COLLECTION_NAME$1);
-	    }
-	    if (domIterables[COLLECTION_NAME$1]) for (var METHOD_NAME in es_array_iterator) {
-	      // some Chrome versions have non-configurable methods on DOMTokenList
-	      if (CollectionPrototype$1[METHOD_NAME] !== es_array_iterator[METHOD_NAME]) try {
-	        createNonEnumerableProperty(CollectionPrototype$1, METHOD_NAME, es_array_iterator[METHOD_NAME]);
-	      } catch (error) {
-	        CollectionPrototype$1[METHOD_NAME] = es_array_iterator[METHOD_NAME];
-	      }
-	    }
-	  }
-	}
-
-	var runtime_1 = createCommonjsModule(function (module) {
-	/**
-	 * Copyright (c) 2014-present, Facebook, Inc.
-	 *
-	 * This source code is licensed under the MIT license found in the
-	 * LICENSE file in the root directory of this source tree.
-	 */
-
-	var runtime = (function (exports) {
-
-	  var Op = Object.prototype;
-	  var hasOwn = Op.hasOwnProperty;
-	  var undefined$1; // More compressible than void 0.
-	  var $Symbol = typeof Symbol === "function" ? Symbol : {};
-	  var iteratorSymbol = $Symbol.iterator || "@@iterator";
-	  var asyncIteratorSymbol = $Symbol.asyncIterator || "@@asyncIterator";
-	  var toStringTagSymbol = $Symbol.toStringTag || "@@toStringTag";
-
-	  function define(obj, key, value) {
-	    Object.defineProperty(obj, key, {
-	      value: value,
-	      enumerable: true,
-	      configurable: true,
-	      writable: true
-	    });
-	    return obj[key];
-	  }
-	  try {
-	    // IE 8 has a broken Object.defineProperty that only works on DOM objects.
-	    define({}, "");
-	  } catch (err) {
-	    define = function(obj, key, value) {
-	      return obj[key] = value;
-	    };
-	  }
-
-	  function wrap(innerFn, outerFn, self, tryLocsList) {
-	    // If outerFn provided and outerFn.prototype is a Generator, then outerFn.prototype instanceof Generator.
-	    var protoGenerator = outerFn && outerFn.prototype instanceof Generator ? outerFn : Generator;
-	    var generator = Object.create(protoGenerator.prototype);
-	    var context = new Context(tryLocsList || []);
-
-	    // The ._invoke method unifies the implementations of the .next,
-	    // .throw, and .return methods.
-	    generator._invoke = makeInvokeMethod(innerFn, self, context);
-
-	    return generator;
-	  }
-	  exports.wrap = wrap;
-
-	  // Try/catch helper to minimize deoptimizations. Returns a completion
-	  // record like context.tryEntries[i].completion. This interface could
-	  // have been (and was previously) designed to take a closure to be
-	  // invoked without arguments, but in all the cases we care about we
-	  // already have an existing method we want to call, so there's no need
-	  // to create a new function object. We can even get away with assuming
-	  // the method takes exactly one argument, since that happens to be true
-	  // in every case, so we don't have to touch the arguments object. The
-	  // only additional allocation required is the completion record, which
-	  // has a stable shape and so hopefully should be cheap to allocate.
-	  function tryCatch(fn, obj, arg) {
-	    try {
-	      return { type: "normal", arg: fn.call(obj, arg) };
-	    } catch (err) {
-	      return { type: "throw", arg: err };
-	    }
-	  }
-
-	  var GenStateSuspendedStart = "suspendedStart";
-	  var GenStateSuspendedYield = "suspendedYield";
-	  var GenStateExecuting = "executing";
-	  var GenStateCompleted = "completed";
-
-	  // Returning this object from the innerFn has the same effect as
-	  // breaking out of the dispatch switch statement.
-	  var ContinueSentinel = {};
-
-	  // Dummy constructor functions that we use as the .constructor and
-	  // .constructor.prototype properties for functions that return Generator
-	  // objects. For full spec compliance, you may wish to configure your
-	  // minifier not to mangle the names of these two functions.
-	  function Generator() {}
-	  function GeneratorFunction() {}
-	  function GeneratorFunctionPrototype() {}
-
-	  // This is a polyfill for %IteratorPrototype% for environments that
-	  // don't natively support it.
-	  var IteratorPrototype = {};
-	  IteratorPrototype[iteratorSymbol] = function () {
-	    return this;
-	  };
-
-	  var getProto = Object.getPrototypeOf;
-	  var NativeIteratorPrototype = getProto && getProto(getProto(values([])));
-	  if (NativeIteratorPrototype &&
-	      NativeIteratorPrototype !== Op &&
-	      hasOwn.call(NativeIteratorPrototype, iteratorSymbol)) {
-	    // This environment has a native %IteratorPrototype%; use it instead
-	    // of the polyfill.
-	    IteratorPrototype = NativeIteratorPrototype;
-	  }
-
-	  var Gp = GeneratorFunctionPrototype.prototype =
-	    Generator.prototype = Object.create(IteratorPrototype);
-	  GeneratorFunction.prototype = Gp.constructor = GeneratorFunctionPrototype;
-	  GeneratorFunctionPrototype.constructor = GeneratorFunction;
-	  GeneratorFunction.displayName = define(
-	    GeneratorFunctionPrototype,
-	    toStringTagSymbol,
-	    "GeneratorFunction"
-	  );
-
-	  // Helper for defining the .next, .throw, and .return methods of the
-	  // Iterator interface in terms of a single ._invoke method.
-	  function defineIteratorMethods(prototype) {
-	    ["next", "throw", "return"].forEach(function(method) {
-	      define(prototype, method, function(arg) {
-	        return this._invoke(method, arg);
-	      });
-	    });
-	  }
-
-	  exports.isGeneratorFunction = function(genFun) {
-	    var ctor = typeof genFun === "function" && genFun.constructor;
-	    return ctor
-	      ? ctor === GeneratorFunction ||
-	        // For the native GeneratorFunction constructor, the best we can
-	        // do is to check its .name property.
-	        (ctor.displayName || ctor.name) === "GeneratorFunction"
-	      : false;
-	  };
-
-	  exports.mark = function(genFun) {
-	    if (Object.setPrototypeOf) {
-	      Object.setPrototypeOf(genFun, GeneratorFunctionPrototype);
-	    } else {
-	      genFun.__proto__ = GeneratorFunctionPrototype;
-	      define(genFun, toStringTagSymbol, "GeneratorFunction");
-	    }
-	    genFun.prototype = Object.create(Gp);
-	    return genFun;
-	  };
-
-	  // Within the body of any async function, `await x` is transformed to
-	  // `yield regeneratorRuntime.awrap(x)`, so that the runtime can test
-	  // `hasOwn.call(value, "__await")` to determine if the yielded value is
-	  // meant to be awaited.
-	  exports.awrap = function(arg) {
-	    return { __await: arg };
-	  };
-
-	  function AsyncIterator(generator, PromiseImpl) {
-	    function invoke(method, arg, resolve, reject) {
-	      var record = tryCatch(generator[method], generator, arg);
-	      if (record.type === "throw") {
-	        reject(record.arg);
-	      } else {
-	        var result = record.arg;
-	        var value = result.value;
-	        if (value &&
-	            typeof value === "object" &&
-	            hasOwn.call(value, "__await")) {
-	          return PromiseImpl.resolve(value.__await).then(function(value) {
-	            invoke("next", value, resolve, reject);
-	          }, function(err) {
-	            invoke("throw", err, resolve, reject);
-	          });
-	        }
-
-	        return PromiseImpl.resolve(value).then(function(unwrapped) {
-	          // When a yielded Promise is resolved, its final value becomes
-	          // the .value of the Promise<{value,done}> result for the
-	          // current iteration.
-	          result.value = unwrapped;
-	          resolve(result);
-	        }, function(error) {
-	          // If a rejected Promise was yielded, throw the rejection back
-	          // into the async generator function so it can be handled there.
-	          return invoke("throw", error, resolve, reject);
-	        });
-	      }
-	    }
-
-	    var previousPromise;
-
-	    function enqueue(method, arg) {
-	      function callInvokeWithMethodAndArg() {
-	        return new PromiseImpl(function(resolve, reject) {
-	          invoke(method, arg, resolve, reject);
-	        });
-	      }
-
-	      return previousPromise =
-	        // If enqueue has been called before, then we want to wait until
-	        // all previous Promises have been resolved before calling invoke,
-	        // so that results are always delivered in the correct order. If
-	        // enqueue has not been called before, then it is important to
-	        // call invoke immediately, without waiting on a callback to fire,
-	        // so that the async generator function has the opportunity to do
-	        // any necessary setup in a predictable way. This predictability
-	        // is why the Promise constructor synchronously invokes its
-	        // executor callback, and why async functions synchronously
-	        // execute code before the first await. Since we implement simple
-	        // async functions in terms of async generators, it is especially
-	        // important to get this right, even though it requires care.
-	        previousPromise ? previousPromise.then(
-	          callInvokeWithMethodAndArg,
-	          // Avoid propagating failures to Promises returned by later
-	          // invocations of the iterator.
-	          callInvokeWithMethodAndArg
-	        ) : callInvokeWithMethodAndArg();
-	    }
-
-	    // Define the unified helper method that is used to implement .next,
-	    // .throw, and .return (see defineIteratorMethods).
-	    this._invoke = enqueue;
-	  }
-
-	  defineIteratorMethods(AsyncIterator.prototype);
-	  AsyncIterator.prototype[asyncIteratorSymbol] = function () {
-	    return this;
-	  };
-	  exports.AsyncIterator = AsyncIterator;
-
-	  // Note that simple async functions are implemented on top of
-	  // AsyncIterator objects; they just return a Promise for the value of
-	  // the final result produced by the iterator.
-	  exports.async = function(innerFn, outerFn, self, tryLocsList, PromiseImpl) {
-	    if (PromiseImpl === void 0) PromiseImpl = Promise;
-
-	    var iter = new AsyncIterator(
-	      wrap(innerFn, outerFn, self, tryLocsList),
-	      PromiseImpl
-	    );
-
-	    return exports.isGeneratorFunction(outerFn)
-	      ? iter // If outerFn is a generator, return the full iterator.
-	      : iter.next().then(function(result) {
-	          return result.done ? result.value : iter.next();
-	        });
-	  };
-
-	  function makeInvokeMethod(innerFn, self, context) {
-	    var state = GenStateSuspendedStart;
-
-	    return function invoke(method, arg) {
-	      if (state === GenStateExecuting) {
-	        throw new Error("Generator is already running");
-	      }
-
-	      if (state === GenStateCompleted) {
-	        if (method === "throw") {
-	          throw arg;
-	        }
-
-	        // Be forgiving, per 25.3.3.3.3 of the spec:
-	        // https://people.mozilla.org/~jorendorff/es6-draft.html#sec-generatorresume
-	        return doneResult();
-	      }
-
-	      context.method = method;
-	      context.arg = arg;
-
-	      while (true) {
-	        var delegate = context.delegate;
-	        if (delegate) {
-	          var delegateResult = maybeInvokeDelegate(delegate, context);
-	          if (delegateResult) {
-	            if (delegateResult === ContinueSentinel) continue;
-	            return delegateResult;
-	          }
-	        }
-
-	        if (context.method === "next") {
-	          // Setting context._sent for legacy support of Babel's
-	          // function.sent implementation.
-	          context.sent = context._sent = context.arg;
-
-	        } else if (context.method === "throw") {
-	          if (state === GenStateSuspendedStart) {
-	            state = GenStateCompleted;
-	            throw context.arg;
-	          }
-
-	          context.dispatchException(context.arg);
-
-	        } else if (context.method === "return") {
-	          context.abrupt("return", context.arg);
-	        }
-
-	        state = GenStateExecuting;
-
-	        var record = tryCatch(innerFn, self, context);
-	        if (record.type === "normal") {
-	          // If an exception is thrown from innerFn, we leave state ===
-	          // GenStateExecuting and loop back for another invocation.
-	          state = context.done
-	            ? GenStateCompleted
-	            : GenStateSuspendedYield;
-
-	          if (record.arg === ContinueSentinel) {
-	            continue;
-	          }
-
-	          return {
-	            value: record.arg,
-	            done: context.done
-	          };
-
-	        } else if (record.type === "throw") {
-	          state = GenStateCompleted;
-	          // Dispatch the exception by looping back around to the
-	          // context.dispatchException(context.arg) call above.
-	          context.method = "throw";
-	          context.arg = record.arg;
-	        }
-	      }
-	    };
-	  }
-
-	  // Call delegate.iterator[context.method](context.arg) and handle the
-	  // result, either by returning a { value, done } result from the
-	  // delegate iterator, or by modifying context.method and context.arg,
-	  // setting context.delegate to null, and returning the ContinueSentinel.
-	  function maybeInvokeDelegate(delegate, context) {
-	    var method = delegate.iterator[context.method];
-	    if (method === undefined$1) {
-	      // A .throw or .return when the delegate iterator has no .throw
-	      // method always terminates the yield* loop.
-	      context.delegate = null;
-
-	      if (context.method === "throw") {
-	        // Note: ["return"] must be used for ES3 parsing compatibility.
-	        if (delegate.iterator["return"]) {
-	          // If the delegate iterator has a return method, give it a
-	          // chance to clean up.
-	          context.method = "return";
-	          context.arg = undefined$1;
-	          maybeInvokeDelegate(delegate, context);
-
-	          if (context.method === "throw") {
-	            // If maybeInvokeDelegate(context) changed context.method from
-	            // "return" to "throw", let that override the TypeError below.
-	            return ContinueSentinel;
-	          }
-	        }
-
-	        context.method = "throw";
-	        context.arg = new TypeError(
-	          "The iterator does not provide a 'throw' method");
-	      }
-
-	      return ContinueSentinel;
-	    }
-
-	    var record = tryCatch(method, delegate.iterator, context.arg);
-
-	    if (record.type === "throw") {
-	      context.method = "throw";
-	      context.arg = record.arg;
-	      context.delegate = null;
-	      return ContinueSentinel;
-	    }
-
-	    var info = record.arg;
-
-	    if (! info) {
-	      context.method = "throw";
-	      context.arg = new TypeError("iterator result is not an object");
-	      context.delegate = null;
-	      return ContinueSentinel;
-	    }
-
-	    if (info.done) {
-	      // Assign the result of the finished delegate to the temporary
-	      // variable specified by delegate.resultName (see delegateYield).
-	      context[delegate.resultName] = info.value;
-
-	      // Resume execution at the desired location (see delegateYield).
-	      context.next = delegate.nextLoc;
-
-	      // If context.method was "throw" but the delegate handled the
-	      // exception, let the outer generator proceed normally. If
-	      // context.method was "next", forget context.arg since it has been
-	      // "consumed" by the delegate iterator. If context.method was
-	      // "return", allow the original .return call to continue in the
-	      // outer generator.
-	      if (context.method !== "return") {
-	        context.method = "next";
-	        context.arg = undefined$1;
-	      }
-
-	    } else {
-	      // Re-yield the result returned by the delegate method.
-	      return info;
-	    }
-
-	    // The delegate iterator is finished, so forget it and continue with
-	    // the outer generator.
-	    context.delegate = null;
-	    return ContinueSentinel;
-	  }
-
-	  // Define Generator.prototype.{next,throw,return} in terms of the
-	  // unified ._invoke helper method.
-	  defineIteratorMethods(Gp);
-
-	  define(Gp, toStringTagSymbol, "Generator");
-
-	  // A Generator should always return itself as the iterator object when the
-	  // @@iterator function is called on it. Some browsers' implementations of the
-	  // iterator prototype chain incorrectly implement this, causing the Generator
-	  // object to not be returned from this call. This ensures that doesn't happen.
-	  // See https://github.com/facebook/regenerator/issues/274 for more details.
-	  Gp[iteratorSymbol] = function() {
-	    return this;
-	  };
-
-	  Gp.toString = function() {
-	    return "[object Generator]";
-	  };
-
-	  function pushTryEntry(locs) {
-	    var entry = { tryLoc: locs[0] };
-
-	    if (1 in locs) {
-	      entry.catchLoc = locs[1];
-	    }
-
-	    if (2 in locs) {
-	      entry.finallyLoc = locs[2];
-	      entry.afterLoc = locs[3];
-	    }
-
-	    this.tryEntries.push(entry);
-	  }
-
-	  function resetTryEntry(entry) {
-	    var record = entry.completion || {};
-	    record.type = "normal";
-	    delete record.arg;
-	    entry.completion = record;
-	  }
-
-	  function Context(tryLocsList) {
-	    // The root entry object (effectively a try statement without a catch
-	    // or a finally block) gives us a place to store values thrown from
-	    // locations where there is no enclosing try statement.
-	    this.tryEntries = [{ tryLoc: "root" }];
-	    tryLocsList.forEach(pushTryEntry, this);
-	    this.reset(true);
-	  }
-
-	  exports.keys = function(object) {
-	    var keys = [];
-	    for (var key in object) {
-	      keys.push(key);
-	    }
-	    keys.reverse();
-
-	    // Rather than returning an object with a next method, we keep
-	    // things simple and return the next function itself.
-	    return function next() {
-	      while (keys.length) {
-	        var key = keys.pop();
-	        if (key in object) {
-	          next.value = key;
-	          next.done = false;
-	          return next;
-	        }
-	      }
-
-	      // To avoid creating an additional object, we just hang the .value
-	      // and .done properties off the next function object itself. This
-	      // also ensures that the minifier will not anonymize the function.
-	      next.done = true;
-	      return next;
-	    };
-	  };
-
-	  function values(iterable) {
-	    if (iterable) {
-	      var iteratorMethod = iterable[iteratorSymbol];
-	      if (iteratorMethod) {
-	        return iteratorMethod.call(iterable);
-	      }
-
-	      if (typeof iterable.next === "function") {
-	        return iterable;
-	      }
-
-	      if (!isNaN(iterable.length)) {
-	        var i = -1, next = function next() {
-	          while (++i < iterable.length) {
-	            if (hasOwn.call(iterable, i)) {
-	              next.value = iterable[i];
-	              next.done = false;
-	              return next;
-	            }
-	          }
-
-	          next.value = undefined$1;
-	          next.done = true;
-
-	          return next;
-	        };
-
-	        return next.next = next;
-	      }
-	    }
-
-	    // Return an iterator with no values.
-	    return { next: doneResult };
-	  }
-	  exports.values = values;
-
-	  function doneResult() {
-	    return { value: undefined$1, done: true };
-	  }
-
-	  Context.prototype = {
-	    constructor: Context,
-
-	    reset: function(skipTempReset) {
-	      this.prev = 0;
-	      this.next = 0;
-	      // Resetting context._sent for legacy support of Babel's
-	      // function.sent implementation.
-	      this.sent = this._sent = undefined$1;
-	      this.done = false;
-	      this.delegate = null;
-
-	      this.method = "next";
-	      this.arg = undefined$1;
-
-	      this.tryEntries.forEach(resetTryEntry);
-
-	      if (!skipTempReset) {
-	        for (var name in this) {
-	          // Not sure about the optimal order of these conditions:
-	          if (name.charAt(0) === "t" &&
-	              hasOwn.call(this, name) &&
-	              !isNaN(+name.slice(1))) {
-	            this[name] = undefined$1;
-	          }
-	        }
-	      }
-	    },
-
-	    stop: function() {
-	      this.done = true;
-
-	      var rootEntry = this.tryEntries[0];
-	      var rootRecord = rootEntry.completion;
-	      if (rootRecord.type === "throw") {
-	        throw rootRecord.arg;
-	      }
-
-	      return this.rval;
-	    },
-
-	    dispatchException: function(exception) {
-	      if (this.done) {
-	        throw exception;
-	      }
-
-	      var context = this;
-	      function handle(loc, caught) {
-	        record.type = "throw";
-	        record.arg = exception;
-	        context.next = loc;
-
-	        if (caught) {
-	          // If the dispatched exception was caught by a catch block,
-	          // then let that catch block handle the exception normally.
-	          context.method = "next";
-	          context.arg = undefined$1;
-	        }
-
-	        return !! caught;
-	      }
-
-	      for (var i = this.tryEntries.length - 1; i >= 0; --i) {
-	        var entry = this.tryEntries[i];
-	        var record = entry.completion;
-
-	        if (entry.tryLoc === "root") {
-	          // Exception thrown outside of any try block that could handle
-	          // it, so set the completion value of the entire function to
-	          // throw the exception.
-	          return handle("end");
-	        }
-
-	        if (entry.tryLoc <= this.prev) {
-	          var hasCatch = hasOwn.call(entry, "catchLoc");
-	          var hasFinally = hasOwn.call(entry, "finallyLoc");
-
-	          if (hasCatch && hasFinally) {
-	            if (this.prev < entry.catchLoc) {
-	              return handle(entry.catchLoc, true);
-	            } else if (this.prev < entry.finallyLoc) {
-	              return handle(entry.finallyLoc);
-	            }
-
-	          } else if (hasCatch) {
-	            if (this.prev < entry.catchLoc) {
-	              return handle(entry.catchLoc, true);
-	            }
-
-	          } else if (hasFinally) {
-	            if (this.prev < entry.finallyLoc) {
-	              return handle(entry.finallyLoc);
-	            }
-
-	          } else {
-	            throw new Error("try statement without catch or finally");
-	          }
-	        }
-	      }
-	    },
-
-	    abrupt: function(type, arg) {
-	      for (var i = this.tryEntries.length - 1; i >= 0; --i) {
-	        var entry = this.tryEntries[i];
-	        if (entry.tryLoc <= this.prev &&
-	            hasOwn.call(entry, "finallyLoc") &&
-	            this.prev < entry.finallyLoc) {
-	          var finallyEntry = entry;
-	          break;
-	        }
-	      }
-
-	      if (finallyEntry &&
-	          (type === "break" ||
-	           type === "continue") &&
-	          finallyEntry.tryLoc <= arg &&
-	          arg <= finallyEntry.finallyLoc) {
-	        // Ignore the finally entry if control is not jumping to a
-	        // location outside the try/catch block.
-	        finallyEntry = null;
-	      }
-
-	      var record = finallyEntry ? finallyEntry.completion : {};
-	      record.type = type;
-	      record.arg = arg;
-
-	      if (finallyEntry) {
-	        this.method = "next";
-	        this.next = finallyEntry.finallyLoc;
-	        return ContinueSentinel;
-	      }
-
-	      return this.complete(record);
-	    },
-
-	    complete: function(record, afterLoc) {
-	      if (record.type === "throw") {
-	        throw record.arg;
-	      }
-
-	      if (record.type === "break" ||
-	          record.type === "continue") {
-	        this.next = record.arg;
-	      } else if (record.type === "return") {
-	        this.rval = this.arg = record.arg;
-	        this.method = "return";
-	        this.next = "end";
-	      } else if (record.type === "normal" && afterLoc) {
-	        this.next = afterLoc;
-	      }
-
-	      return ContinueSentinel;
-	    },
-
-	    finish: function(finallyLoc) {
-	      for (var i = this.tryEntries.length - 1; i >= 0; --i) {
-	        var entry = this.tryEntries[i];
-	        if (entry.finallyLoc === finallyLoc) {
-	          this.complete(entry.completion, entry.afterLoc);
-	          resetTryEntry(entry);
-	          return ContinueSentinel;
-	        }
-	      }
-	    },
-
-	    "catch": function(tryLoc) {
-	      for (var i = this.tryEntries.length - 1; i >= 0; --i) {
-	        var entry = this.tryEntries[i];
-	        if (entry.tryLoc === tryLoc) {
-	          var record = entry.completion;
-	          if (record.type === "throw") {
-	            var thrown = record.arg;
-	            resetTryEntry(entry);
-	          }
-	          return thrown;
-	        }
-	      }
-
-	      // The context.catch method must only be called with a location
-	      // argument that corresponds to a known catch block.
-	      throw new Error("illegal catch attempt");
-	    },
-
-	    delegateYield: function(iterable, resultName, nextLoc) {
-	      this.delegate = {
-	        iterator: values(iterable),
-	        resultName: resultName,
-	        nextLoc: nextLoc
-	      };
-
-	      if (this.method === "next") {
-	        // Deliberately forget the last sent value so that we don't
-	        // accidentally pass it on to the delegate.
-	        this.arg = undefined$1;
-	      }
-
-	      return ContinueSentinel;
-	    }
-	  };
-
-	  // Regardless of whether this script is executing as a CommonJS module
-	  // or not, return the runtime object so that we can declare the variable
-	  // regeneratorRuntime in the outer scope, which allows this module to be
-	  // injected easily by `bin/regenerator --include-runtime script.js`.
-	  return exports;
-
-	}(
-	  // If this script is executing as a CommonJS module, use module.exports
-	  // as the regeneratorRuntime namespace. Otherwise create a new empty
-	  // object. Either way, the resulting object will be used to initialize
-	  // the regeneratorRuntime variable at the top of this file.
-	   module.exports 
-	));
-
-	try {
-	  regeneratorRuntime = runtime;
-	} catch (accidentalStrictMode) {
-	  // This module should not be running in strict mode, so the above
-	  // assignment should always work unless something is misconfigured. Just
-	  // in case runtime.js accidentally runs in strict mode, we can escape
-	  // strict mode using a global Function call. This could conceivably fail
-	  // if a Content Security Policy forbids using Function, but in that case
-	  // the proper solution is to fix the accidental strict mode problem. If
-	  // you've misconfigured your bundler to force strict mode and applied a
-	  // CSP to forbid Function, and you're not willing to fix either of those
-	  // problems, please detail your unique predicament in a GitHub issue.
-	  Function("r", "regeneratorRuntime = r")(runtime);
-	}
-	});
-
 	// chain(util)
 	var generateToken = function generateToken() {
 	  return Symbol('token');
@@ -5903,6 +5006,7 @@
 	var ChainStatus = {
 	  Ready: Symbol('ready'),
 	  Progress: Symbol('progress'),
+	  Bubbling: Symbol('bubbling'),
 	  Finished: Symbol('finished'),
 	  Canceled: Symbol('canceled')
 	};
@@ -5911,17 +5015,7 @@
 	  var context = {
 	    token: generateToken(),
 	    queue: [],
-	    hooks: {
-	      // life-circle
-	      onStart: [],
-	      onProgress: [],
-	      onBeforeCancel: [],
-	      onCanceled: [],
-	      onFinish: [],
-	      // hack-in
-	      onBeforeHack: [],
-	      onHacked: []
-	    },
+	    hooks: {},
 	    data: {
 	      caller: null,
 	      status: ChainStatus.Ready
@@ -5992,8 +5086,8 @@
 	            break;
 
 	          case 11:
-	            context.data.status = ChainStatus.Finished;
-	            triggerHook(context, 'onFinish');
+	            context.data.status = ChainStatus.Bubbling;
+	            triggerHook(context, 'onBubbling');
 
 	          case 13:
 	          case "end":
@@ -6017,31 +5111,33 @@
 	            return createNext(context)();
 
 	          case 5:
-	            _context2.next = 14;
+	            context.data.status = ChainStatus.Finished;
+	            triggerHook(context, 'onFinish');
+	            _context2.next = 16;
 	            break;
 
-	          case 7:
-	            _context2.prev = 7;
+	          case 9:
+	            _context2.prev = 9;
 	            _context2.t0 = _context2["catch"](2);
 
 	            if (!(_context2.t0.status === ChainStatus.Canceled)) {
-	              _context2.next = 13;
+	              _context2.next = 15;
 	              break;
 	            }
 
 	            triggerHook(context, 'onCanceled');
-	            _context2.next = 14;
+	            _context2.next = 16;
 	            break;
 
-	          case 13:
+	          case 15:
 	            throw _context2.t0;
 
-	          case 14:
+	          case 16:
 	          case "end":
 	            return _context2.stop();
 	        }
 	      }
-	    }, _callee2, null, [[2, 7]]);
+	    }, _callee2, null, [[2, 9]]);
 	  }));
 	};
 
@@ -6062,78 +5158,32 @@
 	  return context;
 	};
 
-	var registerHook = function registerHook(context, type) {
-	  var isTriggerImmediately = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : false;
-
-	  if (!type) {
-	    throw new Error("require param 'type'");
+	var useHook = function useHook(context, getData, type, callback) {
+	  if (typeof getData !== 'function') {
+	    throw new Error("Param 'getData' must be an instance of Function");
 	  }
 
-	  if (!context.hooks) {
-	    context.hooks = {};
+	  if (typeof callback !== 'function') {
+	    throw new Error("Param 'callback' must be an instance of Function");
+	  }
+
+	  if (!type) {
+	    throw new Error("Can't find param 'type'");
 	  }
 
 	  if (!context.hooks[type]) {
 	    context.hooks[type] = [];
-
-	    if (isTriggerImmediately) {
-	      triggerHook(context, type);
-	    }
-	  } else {
-	    console.warn("Hook ".concat(type, " has been registered before"));
 	  }
+
+	  context.hooks[type].push({
+	    getData: getData,
+	    callback: callback
+	  });
 	};
 
-	var registerHooks = function registerHooks(context, types) {
-	  var isTriggerImmediately = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : false;
-
-	  if (!Array.isArray(types) && Object.prototype.toString.call(types) !== '[object Object]') {
-	    types = [types];
-	  }
-
-	  if (Array.isArray(types)) {
-	    // prevent same-types in a queue
-	    _toConsumableArray(new Set(types)).forEach(function (type) {
-	      registerHook(context, type, isTriggerImmediately);
-	    });
-	  } else if (Object.prototype.toString.call(types) === '[object Object]') {
-	    for (var key in types) {
-	      var _types$key, _types$key2;
-
-	      if (!Object.prototype.hasOwnProperty.call(types, key)) continue;
-	      registerHook(context, (_types$key = types[key]) === null || _types$key === void 0 ? void 0 : _types$key.type, (_types$key2 = types[key]) === null || _types$key2 === void 0 ? void 0 : _types$key2.trigger);
-	    }
-	  }
-	};
-
-	var useHook = function useHook(context, getData, type, callback) {
-	  // empty-error
-	  if (!type) {
-	    throw new Error("can't find param 'type'");
-	  } // callback type-error
-
-
-	  if (typeof callback !== 'function') {
-	    throw new Error("param 'callback' must be an instance of Function");
-	  } // check type's type-check and push it to list
-
-
-	  if (context.hooks[type] !== void 0) {
-	    var token = generateToken();
-	    context.hooks[type].push({
-	      token: token,
-	      getData: getData,
-	      callback: callback
-	    });
-	    return token;
-	  } else {
-	    throw new Error("can't find hook type: ".concat(type));
-	  }
-	};
-
-	var removeHook = function removeHook(context, token) {
-	  if (!token) {
-	    throw new Error("can't find param 'token'");
+	var removeHook = function removeHook(context, target) {
+	  if (!target) {
+	    throw new Error("can't find param 'target'");
 	  }
 
 	  var hooks = context.hooks;
@@ -6144,9 +5194,21 @@
 	    if (!Object.prototype.hasOwnProperty.call(hooks, key)) continue;
 	    if (!((_hooks$key = hooks[key]) === null || _hooks$key === void 0 ? void 0 : _hooks$key.length)) continue;
 	    hooks[key] = hooks[key].filter(function (hook) {
-	      return hook.token !== token;
+	      return hook.callback !== target;
 	    });
 	  }
+	};
+
+	var removeHooks = function removeHooks(context, type) {
+	  if (!type) {
+	    context.hooks = {};
+	    return;
+	  }
+
+	  var types = Array.isArray(type) ? type : type.spilit(' ');
+	  types.forEach(function (type) {
+	    context.hooks[type] = [];
+	  });
 	};
 
 	var triggerHook = function triggerHook(context, type) {
@@ -6162,13 +5224,12 @@
 
 	  var hooks = context === null || context === void 0 ? void 0 : (_context$hooks = context.hooks) === null || _context$hooks === void 0 ? void 0 : _context$hooks[type];
 
-	  if ((hooks === null || hooks === void 0 ? void 0 : hooks.length) || (hooks === null || hooks === void 0 ? void 0 : hooks.length) === 0) {
+	  if (hooks && (hooks === null || hooks === void 0 ? void 0 : hooks.length)) {
 	    hooks.forEach(function (hook) {
 	      hook.callback.apply(hook, [hook.getData()].concat(params));
 	    });
 	    return true;
 	  } else {
-	    console.warn("hook doesn't exists: ".concat(type));
 	    return false;
 	  }
 	};
@@ -6215,10 +5276,32 @@
 	    }
 	  }, {
 	    key: "start",
-	    value: function start() {
-	      startProgress(this._context)();
-	      return this;
-	    }
+	    value: function () {
+	      var _start = _asyncToGenerator( /*#__PURE__*/regeneratorRuntime.mark(function _callee() {
+	        return regeneratorRuntime.wrap(function _callee$(_context) {
+	          while (1) {
+	            switch (_context.prev = _context.next) {
+	              case 0:
+	                _context.next = 2;
+	                return startProgress(this._context)();
+
+	              case 2:
+	                return _context.abrupt("return", this);
+
+	              case 3:
+	              case "end":
+	                return _context.stop();
+	            }
+	          }
+	        }, _callee, this);
+	      }));
+
+	      function start() {
+	        return _start.apply(this, arguments);
+	      }
+
+	      return start;
+	    }()
 	  }, {
 	    key: "cancel",
 	    value: function cancel() {
@@ -6227,81 +5310,80 @@
 	    } // hooks
 
 	  }, {
-	    key: "useHook",
-	    value: function useHook$1(type, callback, getToken) {
+	    key: "on",
+	    value: function on(type, callback) {
 	      var _this = this;
 
-	      var token = useHook(this._context, function () {
+	      useHook(this._context, function () {
 	        return _this._context.data;
 	      }, type, callback);
-
-	      if (typeof token === 'function') {
-	        getToken(token);
+	      return this;
+	    }
+	  }, {
+	    key: "off",
+	    value: function off(target) {
+	      if (typeof target === 'function') {
+	        removeHook(this._context, target);
+	      } else {
+	        removeHooks(target);
 	      }
 
 	      return this;
 	    }
 	  }, {
-	    key: "removeHook",
-	    value: function removeHook$1(token) {
-	      removeHook(this._context, token);
-
-	      return this;
-	    }
-	  }, {
-	    key: "registerHook",
-	    value: function registerHook(type) {
-	      registerHooks(this._context, type);
-	      return this;
-	    }
-	  }, {
-	    key: "triggerHook",
-	    value: function triggerHook$1(type) {
+	    key: "emit",
+	    value: function emit(type) {
 	      triggerHook(this._context, type);
-
 	      return this;
 	    } // life-circle-hooks
 
 	  }, {
 	    key: "onStart",
-	    value: function onStart(callback, getToken) {
-	      this.useHook('onStart', callback, getToken);
+	    value: function onStart(callback) {
+	      this.on('onStart', callback);
 	      return this;
 	    }
 	  }, {
 	    key: "onProgress",
-	    value: function onProgress(callback, getToken) {
-	      this.useHook('onProgress', callback, getToken);
+	    value: function onProgress(callback) {
+	      this.on('onProgress', callback);
 	      return this;
 	    }
 	  }, {
 	    key: "onBeforeCancel",
-	    value: function onBeforeCancel(callback, getToken) {
-	      this.useHook('onBeforeCancel', callback, getToken);
+	    value: function onBeforeCancel(callback) {
+	      this.on('onBeforeCancel', callback);
 	      return this;
 	    }
 	  }, {
 	    key: "onCanceled",
-	    value: function onCanceled(callback, getToken) {
-	      this.useHook('onCanceled', callback, getToken);
+	    value: function onCanceled(callback) {
+	      this.on('onCanceled', callback);
+	      return this;
+	    }
+	  }, {
+	    key: "onBubbling",
+	    value: function onBubbling(callback) {
+	      this.on('onBubbling', callback);
 	      return this;
 	    }
 	  }, {
 	    key: "onFinish",
-	    value: function onFinish(callback, getToken) {
-	      this.useHook('onFinish', callback, getToken);
+	    value: function onFinish(callback) {
+	      this.on('onFinish', callback);
 	      return this;
-	    }
+	    } // hack-hooks
+
 	  }, {
 	    key: "onBeforeHack",
-	    value: function onBeforeHack(callback, getToken) {
-	      this.useHook('onBeforeHack', callback, getToken);
+	    value: function onBeforeHack(callback) {
+	      this.on('onBeforeHack', callback);
 	      return this;
 	    }
 	  }, {
 	    key: "onHacked",
-	    value: function onHacked(callback, getToken) {
-	      this.useHook('onHacked', callback, getToken);
+	    value: function onHacked(callback) {
+	      this.on('onHacked', callback);
 	      return this;
 	    }
 	  }]);
@@ -6324,8 +5406,6 @@
 	exports.createNext = createNext;
 	exports.hackContext = hackContext;
 	exports.initializeContext = initializeContext;
-	exports.registerHook = registerHook;
-	exports.registerHooks = registerHooks;
 	exports.removeHook = removeHook;
 	exports.triggerHook = triggerHook;
 	exports.useHook = useHook;

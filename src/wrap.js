@@ -12,10 +12,9 @@ import {
   startProgress,
   cancelProgress,
   hackContext,
-  registerHook,
-  registerHooks,
   useHook,
   removeHook,
+  removeHooks,
   triggerHook,
 } from './body';
 
@@ -49,8 +48,8 @@ class ChainBuilder {
     );
     return this;
   }
-  start() {
-    startProgress(this._context)();
+  async start() {
+    await startProgress(this._context)();
     return this;
   }
   cancel() {
@@ -59,53 +58,56 @@ class ChainBuilder {
   }
 
   // hooks
-  useHook(type, callback, getToken) {
-    const token = useHook(this._context, () => this._context.data, type, callback);
-    if (typeof token === 'function') {
-      getToken(token);
+  on(type, callback) {
+    useHook(this._context, () => this._context.data, type, callback);
+    return this;
+  }
+  off(target) {
+    if (typeof target === 'function') {
+      removeHook(this._context, target);
+    } else {
+      removeHooks(target);
     }
     return this;
   }
-  removeHook(token) {
-    removeHook(this._context, token);
-    return this;
-  }
-  registerHook(type) {
-    registerHooks(this._context, type);
-    return this;
-  }
-  triggerHook(type) {
+  emit(type) {
     triggerHook(this._context, type);
     return this;
   }
 
   // life-circle-hooks
-  onStart(callback, getToken) {
-    this.useHook('onStart', callback, getToken);
+  onStart(callback) {
+    this.on('onStart', callback);
     return this;
   }
-  onProgress(callback, getToken) {
-    this.useHook('onProgress', callback, getToken);
+  onProgress(callback) {
+    this.on('onProgress', callback);
     return this;
   }
-  onBeforeCancel(callback, getToken) {
-    this.useHook('onBeforeCancel', callback, getToken);
+  onBeforeCancel(callback) {
+    this.on('onBeforeCancel', callback);
     return this;
   }
-  onCanceled(callback, getToken) {
-    this.useHook('onCanceled', callback, getToken);
+  onCanceled(callback) {
+    this.on('onCanceled', callback);
     return this;
   }
-  onFinish(callback, getToken) {
-    this.useHook('onFinish', callback, getToken);
+  onBubbling(callback) {
+    this.on('onBubbling', callback);
     return this;
   }
-  onBeforeHack(callback, getToken) {
-    this.useHook('onBeforeHack', callback, getToken);
+  onFinish(callback) {
+    this.on('onFinish', callback);
     return this;
   }
-  onHacked(callback, getToken) {
-    this.useHook('onHacked', callback, getToken);
+
+  // hack-hooks
+  onBeforeHack(callback) {
+    this.on('onBeforeHack', callback);
+    return this;
+  }
+  onHacked(callback) {
+    this.on('onHacked', callback);
     return this;
   }
 }
@@ -123,8 +125,6 @@ export {
   createNext,
   cancelProgress,
   hackContext,
-  registerHook,
-  registerHooks,
   useHook,
   removeHook,
   triggerHook,
